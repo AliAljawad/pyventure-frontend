@@ -10,6 +10,7 @@ import Playground from "./pages/Playground";
 import Profile from "./pages/Profile";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
+import TwoFactorAuth from "./pages/TwoFactorAuth";
 
 const queryClient = new QueryClient();
 
@@ -26,6 +27,7 @@ const App = () => (
           <Route path="/profile" element={<Profile />} />
           <Route path="/login" element={<Login />} />
           <Route path="*" element={<NotFound />} />
+          <Route path="/2fa" element={<TwoFactorAuth />} />
         </Routes>
       </BrowserRouter>
     </TooltipProvider>
