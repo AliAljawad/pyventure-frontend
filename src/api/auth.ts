@@ -38,6 +38,22 @@ export const loginUser = async (email: string, password: string) => {
 
   const data = await res.json();
   console.log(data);
-  if (!res.ok) throw new Error(data.message || "Login failed");
+  if (!res.ok) throw new Error(data.error || "Login failed");
+  return data;
+};
+
+export const verify2FA = async (email: string, code: string) => {
+  const res = await fetch(`http://127.0.0.1:8000/api/verify-2fa`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({ email, code }),
+  });
+
+  const data = await res.json();
+  console.log(data);
+  if (!res.ok) throw new Error(data.message || "2FA verification failed");
   return data;
 };

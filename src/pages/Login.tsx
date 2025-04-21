@@ -41,9 +41,10 @@ const Login = () => {
     setIsLoading(true);
     try {
       const data = await loginUser(loginData.email, loginData.password);
-      localStorage.setItem("token", data.token);
-      toast.success("Logged in successfully!");
-      navigate("/playground");
+      // Store the email in sessionStorage for the 2FA verification
+      sessionStorage.setItem("authEmail", loginData.email);
+      toast.success(data.message || "Please check your email for the 2FA code");
+      navigate("/2fa");
     } catch (error: unknown) {
       if (error instanceof Error) {
         toast.error(error.message);
@@ -66,9 +67,12 @@ const Login = () => {
         signupData.password,
         signupData.password_confirmation
       );
-      localStorage.setItem("token", data.token);
-      toast.success("Account created!");
-      navigate("/playground");
+      // Store the email in sessionStorage for the 2FA verification
+      sessionStorage.setItem("authEmail", signupData.email);
+      toast.success(
+        data.message || "Account created! Please verify your email"
+      );
+      navigate("/2fa");
     } catch (error: unknown) {
       if (error instanceof Error) {
         toast.error(error.message);
