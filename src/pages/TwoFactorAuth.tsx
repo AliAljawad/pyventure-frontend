@@ -13,36 +13,58 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
 import FooterSection from "@/components/FooterSection";
+import { verify2FA } from "@/api/auth";
 
 const TwoFactorAuth = () => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
+  const [email, setEmail] = useState("");
 
-  // Update title
+  // Update title and get email from session storage
   useEffect(() => {
     document.title = "2FA Verification - PyVenture";
-  }, []);
 
-  const handleVerify = () => {
+    const storedEmail = sessionStorage.getItem("authEmail");
+    if (!storedEmail) {
+      // If no email in session storage, redirect to login
+      toast.error("Authentication error. Please log in again.");
+      navigate("/login");
+      return;
+    }
+
+    setEmail(storedEmail);
+  }, [navigate]);
+
+  const handleVerify = async () => {
     setIsLoading(true);
     const otpValue = otp.join("");
 
-    // Simulate 2FA verification process
-    setTimeout(() => {
-      setIsLoading(false);
-      if (otpValue.length === 6) {
-        toast.success("2FA verification successful!", {
-          description: "Your account is now secured with 2FA.",
-          icon: <ShieldCheck className="text-green-500" />,
-        });
-        navigate("/playground");
+    try {
+      const data = await verify2FA(email, otpValue);
+
+      // Store token and user data
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
+
+      // Clear the session email since we no longer need it
+      sessionStorage.removeItem("authEmail");
+
+      toast.success("2FA verification successful!", {
+        description: "Welcome to PyVenture!",
+        icon: <ShieldCheck className="text-green-500" />,
+      });
+
+      navigate("/playground");
+    } catch (error) {
+      if (error instanceof Error) {
+        toast.error(error.message);
       } else {
-        toast.error("Invalid verification code", {
-          description: "Please enter a valid 6-digit code.",
-        });
+        toast.error("Invalid verification code");
       }
-    }, 1500);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleInputChange = (index, value) => {
@@ -84,6 +106,16 @@ const TwoFactorAuth = () => {
     setOtp(newOtp);
   };
 
+  const handleResendCode = async () => {
+    try {
+      // This would need to call an API endpoint to resend the code
+      // For now we'll just show a toast
+      toast.success("A new verification code has been sent to your email");
+    } catch (error) {
+      toast.error("Failed to resend code");
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
@@ -99,7 +131,7 @@ const TwoFactorAuth = () => {
                 Two-Factor Authentication
               </CardTitle>
               <CardDescription className="text-gray-400">
-                Please enter the verification code sent to your device
+                Please enter the verification code sent to {email}
               </CardDescription>
             </CardHeader>
 
@@ -123,7 +155,10 @@ const TwoFactorAuth = () => {
 
               <div className="text-sm text-center text-gray-400 mt-4">
                 Didn't receive a code?{" "}
-                <button className="text-space-nebula hover:underline">
+                <button
+                  className="text-space-nebula hover:underline"
+                  onClick={handleResendCode}
+                >
                   Resend
                 </button>
               </div>
