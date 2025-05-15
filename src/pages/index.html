@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Python Logo Collector</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #333;
+        }
+        canvas {
+            border: 2px solid #fff;
+        }
+        #game-container {
+            position: relative;
+        }
+        #status {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 18px;
+            z-index: 100;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.55.2/phaser.min.js"></script>
+</head>
+<body>
+    <div id="game-container">
+        <div id="status"></div>
+    </div>
+
+    <script>
+        // Game config and setup
+        const config = {
+            type: Phaser.AUTO,
+            width: 960,
+            height: 640,
+            parent: 'game-container',
+            pixelArt: true,
+            physics: {
+                default: 'arcade',
+                arcade: {
+                    gravity: { y: 500 },
+                    debug: false
+                }
+            },
+            scene: {
+                preload: preload,
+                create: create,
+                update: update
+            }
+        };
+
+        // Game variables
+        let player;
+        let cursors;
+        let pythonLogo;
+        let statusText;
+        let gameOver = false;
+        let gameWon = false;
+        
+        // Create game instance
+        const game = new Phaser.Game(config);
+
+        function preload() {
+            // Load assets
+            this.load.image('tileset', 'tileset1.jpeg');
+            this.load.tilemapCSV('map', 'level1.csv');
+            this.load.image('player', 'player.jpg');
+            
+            // Use embedded level data if CSV file isn't available
+            this.csvData = `"-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,26,-1,-1,-1,-1,-1,-1,-1
+-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,4,-1,-1,-1,-1,-1,-1,-1
+-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,19,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,19,-1,-1,-1,4,4,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,3,4,4,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,3,3,-1,-1,-1
+-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+-1,-1,-1,-1,-1,-1,-1,-1,19,-1,-1,-1,19,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+-1,-1,-1,-1,-1,-1,3,4,4,4,4,4,4,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+0,1,1,1,1,2,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23"`;
+        }
+
+        function create() {
+            // Create tilemap
+            const map = this.make.tilemap({ key: 'map', tileWidth: 32, tileHeight: 32 });
+            const tileset = map.addTilesetImage('tileset');
+            
+            // Create layers
+            const layer = map.createLayer(0, tileset, 0, 0);
+            
+            // Set tile collisions
+            layer.setCollisionBetween(0, 15); // Solid blocks
+            
+            // Set hazards (spikes and acid)
+            map.forEachTile(function(tile) {
+                if (tile.index === 19) { // Spikes
+                    tile.setCollision(true, true, true, true);
+                    tile.properties.isSpike = true;
+                } else if (tile.index === 23) { // Acid
+                    tile.setCollision(true, true, true, false);
+                    tile.properties.isAcid = true;
+                }
+            });
+            
+            // Create player
+            player = this.physics.add.sprite(100, 450, 'player', 24); // Player sprite from tileset
+            player.setBounce(0.1);
+            player.setCollideWorldBounds(true);
+            
+            // Create Python logo (ID 26 in the tilemap)
+            const logoPosition = findTilePosition(map, 26);
+            if (logoPosition) {
+                pythonLogo = this.physics.add.sprite(logoPosition.x, logoPosition.y, 'player', 26);
+                // Remove the tile from the map
+                map.removeTileAt(logoPosition.tileX, logoPosition.tileY);
+            }
+            
+            // Set up collisions
+            this.physics.add.collider(player, layer, function(player, tile) {
+                if (tile.properties.isSpike || tile.properties.isAcid) {
+                    playerDied();
+                }
+            });
+            
+            // Set up logo collection
+            if (pythonLogo) {
+                this.physics.add.overlap(player, pythonLogo, collectLogo, null, this);
+            }
+            
+            // Create animations
+            this.player = this.physics.add.sprite(100, 450, 'player');
+            // Set up keyboard controls
+            cursors = this.input.keyboard.createCursorKeys();
+            
+            // Set up status text
+            statusText = document.getElementById('status');
+            
+            // Helper function to find specific tile position
+            function findTilePosition(map, tileIndex) {
+                for (let y = 0; y < map.height; y++) {
+                    for (let x = 0; x < map.width; x++) {
+                        const tile = map.getTileAt(x, y);
+                        if (tile && tile.index === tileIndex) {
+                            return {
+                                tileX: x,
+                                tileY: y,
+                                x: x * 32 + 16, // Center of tile
+                                y: y * 32 + 16  // Center of tile
+                            };
+                        }
+                    }
+                }
+                return null;
+            }
+            
+            // Set camera to follow player
+            this.cameras.main.startFollow(player);
+            this.cameras.main.setBounds(0, 0, map.widthInPixels, map.heightInPixels);
+        }
+
+        function update() {
+            if (gameOver || gameWon) {
+                return;
+            }
+            
+            // Handle player movement
+            if (cursors.left.isDown) {
+                player.setVelocityX(-160);
+                player.anims.play('left', true);
+                player.flipX = true;
+            } else if (cursors.right.isDown) {
+                player.setVelocityX(160);
+                player.anims.play('right', true);
+                player.flipX = false;
+            } else {
+                player.setVelocityX(0);
+                player.anims.play('idle', true);
+            }
+            
+            // Handle jumping
+            if (cursors.up.isDown && player.body.onFloor()) {
+                player.setVelocityY(-350);
+            }
+            
+            // Check for falling out of bounds
+            if (player.y > config.height) {
+                playerDied();
+            }
+        }
+
+        function collectLogo(player, logo) {
+            logo.disableBody(true, true);
+            statusText.textContent = 'You collected the Python logo! You win!';
+            gameWon = true;
+            
+            // Add some celebratory effect
+            this.tweens.add({
+                targets: player,
+                y: player.y - 30,
+                duration: 300,
+                ease: 'Linear',
+                yoyo: true,
+                repeat: 2
+            });
+        }
+
+        function playerDied() {
+            gameOver = true;
+            player.setTint(0xff0000);
+            player.anims.play('idle');
+            statusText.textContent = 'Game Over! Press R to restart';
+            
+            // Add key to restart
+            game.scene.scenes[0].input.keyboard.once('keydown-R', function() {
+                gameOver = false;
+                gameWon = false;
+                statusText.textContent = '';
+                game.scene.scenes[0].scene.restart();
+            });
+        }
+    </script>
+</body>
+</html>
