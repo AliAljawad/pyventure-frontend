@@ -4,11 +4,13 @@ import Phaser from "phaser";
 interface PhaserGameProps {
   onReachCheckpoint: () => void;
   onCollectAllStars?: () => void;
+  level: number;
 }
 
 const PhaserGame = ({
   onReachCheckpoint,
   onCollectAllStars,
+  level = 1,
 }: PhaserGameProps) => {
   const gameContainerRef = useRef<HTMLDivElement>(null);
   const gameInstanceRef = useRef<Phaser.Game | null>(null);
@@ -91,8 +93,11 @@ const PhaserGame = ({
         loadingText.destroy();
       });
 
-      // Load the CSV tilemap
-      this.load.tilemapCSV("level1", "../../public/assets/tilemaps/level1.csv");
+      // Load the CSV tilemap based on level
+      this.load.tilemapCSV(
+        `level${level}`,
+        `../../public/assets/tilemaps/level${level}.csv`
+      );
 
       // Load tileset images - matching your TMJ structure
       this.load.image("tileset", "../../public/assets/tilesets/tileSet.jpeg"); // firstgid: 1
@@ -131,7 +136,7 @@ const PhaserGame = ({
 
       // Create the tilemap from CSV
       map = this.make.tilemap({
-        key: "level1",
+        key: `level${level}`,
         tileWidth: 32,
         tileHeight: 32,
       });
@@ -352,6 +357,29 @@ const PhaserGame = ({
         "⚠️ Avoid the spikes!",
         "🐍 Find the Python logo!",
       ]);
+
+      // Add level title
+      const levelTitle = this.add
+        .text(this.cameras.main.width / 2, 50, `Level ${level}`, {
+          font: "bold 24px monospace",
+          color: "#ffffff",
+          backgroundColor: "rgba(0,0,0,0.5)",
+          padding: { x: 16, y: 8 },
+        })
+        .setOrigin(0.5)
+        .setScrollFactor(0)
+        .setDepth(100);
+
+      // Make it fade out after a few seconds
+      this.tweens.add({
+        targets: levelTitle,
+        alpha: { from: 1, to: 0 },
+        delay: 3000,
+        duration: 1000,
+        onComplete: () => {
+          levelTitle.destroy();
+        },
+      });
     }
 
     // Game loop
@@ -421,7 +449,7 @@ const PhaserGame = ({
         gameInstanceRef.current = null;
       }
     };
-  }, [onReachCheckpoint, onCollectAllStars]);
+  }, [onReachCheckpoint, onCollectAllStars, level]);
 
   return (
     <div className="relative">
