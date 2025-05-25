@@ -1,6 +1,6 @@
 import React from "react";
 import { ArrowLeft, Info } from "lucide-react";
-import { Level } from "./levelSelect";
+import { Level } from "./LevelSelect";
 
 interface LevelInfoProps {
   level: Level;

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import Phaser from "phaser";
 
 interface PhaserGameProps {
@@ -14,6 +14,11 @@ const PhaserGame = ({
 }: PhaserGameProps) => {
   const gameContainerRef = useRef<HTMLDivElement>(null);
   const gameInstanceRef = useRef<Phaser.Game | null>(null);
+
+  // Stabilize the callback to prevent unnecessary re-renders
+  const stableOnReachCheckpoint = useCallback(() => {
+    onReachCheckpoint();
+  }, []);
 
   useEffect(() => {
     if (!gameContainerRef.current) return;
@@ -127,6 +132,166 @@ const PhaserGame = ({
       ); // Standing still
     }
 
+    // Enhanced smoke particle effect with more particles and variety
+    function createEnhancedSmokeEffect(
+      scene: Phaser.Scene,
+      x: number,
+      y: number
+    ) {
+      // Create large smoke clouds (more particles)
+      const smokeParticles: Phaser.GameObjects.Graphics[] = [];
+
+      // Large smoke puffs
+      for (let i = 0; i < 15; i++) {
+        const smoke = scene.add.graphics();
+        const size = Phaser.Math.Between(8, 15);
+        const opacity = Phaser.Math.FloatBetween(0.6, 0.9);
+
+        smoke.fillStyle(0x666666, opacity);
+        smoke.fillCircle(0, 0, size);
+        smoke.setPosition(
+          x + Phaser.Math.Between(-30, 30),
+          y + Phaser.Math.Between(-15, 15)
+        );
+
+        smokeParticles.push(smoke);
+
+        // Animate each smoke particle with varied movement
+        scene.tweens.add({
+          targets: smoke,
+          y: smoke.y - Phaser.Math.Between(60, 120),
+          x: smoke.x + Phaser.Math.Between(-50, 50),
+          alpha: { from: opacity, to: 0 },
+          scaleX: { from: 1, to: Phaser.Math.FloatBetween(2, 3) },
+          scaleY: { from: 1, to: Phaser.Math.FloatBetween(2, 3) },
+          duration: Phaser.Math.Between(1000, 1800),
+          ease: "Power2",
+          onComplete: () => {
+            smoke.destroy();
+          },
+        });
+      }
+
+      // Medium smoke particles
+      for (let i = 0; i < 12; i++) {
+        const puff = scene.add.graphics();
+        const size = Phaser.Math.Between(5, 10);
+        puff.fillStyle(0x888888, 0.7);
+        puff.fillCircle(0, 0, size);
+        puff.setPosition(
+          x + Phaser.Math.Between(-25, 25),
+          y + Phaser.Math.Between(-10, 10)
+        );
+
+        scene.tweens.add({
+          targets: puff,
+          y: puff.y - Phaser.Math.Between(40, 80),
+          x: puff.x + Phaser.Math.Between(-40, 40),
+          alpha: { from: 0.7, to: 0 },
+          scaleX: { from: 0.8, to: 2.5 },
+          scaleY: { from: 0.8, to: 2.5 },
+          duration: Phaser.Math.Between(800, 1400),
+          delay: Phaser.Math.Between(0, 200),
+          ease: "Power1",
+          onComplete: () => {
+            puff.destroy();
+          },
+        });
+      }
+
+      // Small dust particles for detail
+      for (let i = 0; i < 20; i++) {
+        const dust = scene.add.graphics();
+        const size = Phaser.Math.Between(2, 5);
+        dust.fillStyle(0xaaaaaa, 0.8);
+        dust.fillCircle(0, 0, size);
+        dust.setPosition(
+          x + Phaser.Math.Between(-40, 40),
+          y + Phaser.Math.Between(-20, 20)
+        );
+
+        scene.tweens.add({
+          targets: dust,
+          y: dust.y - Phaser.Math.Between(30, 60),
+          x: dust.x + Phaser.Math.Between(-60, 60),
+          alpha: { from: 0.8, to: 0 },
+          scaleX: { from: 1, to: 1.5 },
+          scaleY: { from: 1, to: 1.5 },
+          duration: Phaser.Math.Between(600, 1000),
+          delay: Phaser.Math.Between(0, 300),
+          ease: "Sine.easeOut",
+          onComplete: () => {
+            dust.destroy();
+          },
+        });
+      }
+
+      // Add some spark-like effects
+      for (let i = 0; i < 8; i++) {
+        const spark = scene.add.graphics();
+        spark.fillStyle(0xffaa00, 0.9);
+        spark.fillCircle(0, 0, 2);
+        spark.setPosition(
+          x + Phaser.Math.Between(-20, 20),
+          y + Phaser.Math.Between(-10, 10)
+        );
+
+        scene.tweens.add({
+          targets: spark,
+          y: spark.y - Phaser.Math.Between(20, 40),
+          x: spark.x + Phaser.Math.Between(-30, 30),
+          alpha: { from: 0.9, to: 0 },
+          duration: Phaser.Math.Between(400, 800),
+          delay: Phaser.Math.Between(0, 100),
+          ease: "Power2",
+          onComplete: () => {
+            spark.destroy();
+          },
+        });
+      }
+    }
+
+    // Function to handle player death with fade effect
+    function handlePlayerDeath(
+      scene: Phaser.Scene,
+      playerObj: Phaser.Physics.Arcade.Sprite
+    ) {
+      
+      // Create enhanced smoke effect at player position
+      createEnhancedSmokeEffect(scene, playerObj.x, playerObj.y);
+
+      // Freeze player movement
+      playerObj.body.enable = false;
+      playerObj.setVelocity(0, 0);
+
+      // Fade out the player
+      scene.tweens.add({
+        targets: playerObj,
+        alpha: { from: 1, to: 0 },
+        scaleX: { from: characterScale, to: characterScale * 0.5 },
+        scaleY: { from: characterScale, to: characterScale * 0.5 },
+        duration: 800,
+        ease: "Power2",
+        onComplete: () => {
+          // After fade out, wait a moment then respawn
+          scene.time.delayedCall(400, () => {
+            // Reset player position and properties
+            playerObj.setPosition(spawnX, spawnY - 10);
+            playerObj.setVelocity(0, 0);
+            playerObj.setTexture("player_idle");
+            playerObj.setScale(characterScale);
+            playerObj.setAlpha(1); // Reset alpha
+            currentAnimation = "";
+
+            // Re-enable physics after short delay
+            scene.time.delayedCall(100, () => {
+              playerObj.body.enable = true;
+            });
+          });
+        },
+      });
+    }
+
     // Create game world
     function create(this: Phaser.Scene) {
       // Reset game state
@@ -232,60 +397,8 @@ const PhaserGame = ({
           deadlyTiles.includes(tileObj.index) &&
           playerObj instanceof Phaser.Physics.Arcade.Sprite
         ) {
-          // Shake and flash
-          this.cameras.main.shake(250, 0.02);
-          this.cameras.main.flash(250, 255, 0, 0);
-
-          // Create red overlay
-          // Create red overlay that always fills the screen
-          const redOverlay = this.add
-            .rectangle(
-              0,
-              0,
-              this.cameras.main.width,
-              this.cameras.main.height,
-              0xff0000,
-              0.3
-            )
-            .setOrigin(0)
-            .setScrollFactor(0)
-            .setDepth(1000); // Ensure it's above everything
-
-          // Show "You Died!" text centered on screen
-          const deathText = this.add
-            .text(
-              this.cameras.main.width / 2,
-              this.cameras.main.height / 2,
-              "You Died!",
-              {
-                fontSize: "40px",
-                color: "#ff0000",
-                fontStyle: "bold",
-                stroke: "#000",
-                strokeThickness: 4,
-              }
-            )
-            .setOrigin(0.5)
-            .setScrollFactor(0)
-            .setDepth(1001); // Make sure it's above the overlay
-
-          // Freeze player
-          playerObj.body.enable = false;
-
-          this.time.delayedCall(1000, () => {
-            playerObj.setPosition(spawnX, spawnY - 10); // Slightly above the ground
-            playerObj.setVelocity(0, 0);
-            playerObj.setTexture("player_idle");
-            playerObj.setScale(characterScale);
-            currentAnimation = "";
-
-            this.time.delayedCall(50, () => {
-              playerObj.body.enable = true; // Re-enable after short delay
-            });
-
-            redOverlay.destroy();
-            deathText.destroy();
-          });
+          // Use the enhanced death effect
+          handlePlayerDeath(this, playerObj);
         }
       });
 
@@ -294,40 +407,7 @@ const PhaserGame = ({
         const tileObj = tile as Phaser.Tilemaps.Tile;
         if (checkpointTiles.includes(tileObj.index) && !reachedCheckpoint) {
           reachedCheckpoint = true;
-
-          // Visual feedback for reaching checkpoint
-          this.cameras.main.flash(500, 0, 255, 0);
-
-          // Change checkpoint tile color
-          tileObj.tint = 0x00ff00;
-
-          // Create completion text
-          const completionText = this.add.text(
-            400,
-            100,
-            "Checkpoint Reached!",
-            {
-              fontSize: "32px",
-              color: "#00ff00",
-              fontStyle: "bold",
-            }
-          );
-          completionText.setOrigin(0.5);
-          completionText.setShadow(2, 2, "#000000", 2);
-
-          // Make it flash
-          this.tweens.add({
-            targets: completionText,
-            alpha: { from: 1, to: 0.5 },
-            yoyo: true,
-            repeat: 3,
-            duration: 300,
-            onComplete: () => {
-              completionText.destroy();
-            },
-          });
-
-          onReachCheckpoint();
+          stableOnReachCheckpoint();
         }
       });
 
@@ -432,13 +512,8 @@ const PhaserGame = ({
 
       // Check if player fell off the world
       if (player.y > map.heightInPixels + 100) {
-        // Respawn player
-        player.setPosition(spawnX, spawnY);
-        player.setVelocity(0, 0);
-        player.setTexture("player_idle");
-        player.setScale(characterScale); // Maintain scale after respawn
-        lastDirection = "idle";
-        currentAnimation = ""; // Reset animation tracking
+        // Use the enhanced death effect for falling off the world too
+        handlePlayerDeath(this, player);
       }
     }
 
@@ -449,7 +524,7 @@ const PhaserGame = ({
         gameInstanceRef.current = null;
       }
     };
-  }, [onReachCheckpoint, onCollectAllStars, level]);
+  }, [level]); // Only depend on level changes
 
   return (
     <div className="relative">

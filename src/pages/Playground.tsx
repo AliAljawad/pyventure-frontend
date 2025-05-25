@@ -3,7 +3,7 @@ import Navbar from "@/components/Navbar";
 import FooterSection from "@/components/FooterSection";
 import CodeEditor from "@/components/CodeEditor";
 import PhaserGame from "@/components/PhaserGame";
-import LevelSelect, { Level } from "@/components/levelSelect";
+import LevelSelect, { Level } from "@/components/LevelSelect";
 import LevelInfo from "@/components/LevelInfo";
 import {
   Dialog,
