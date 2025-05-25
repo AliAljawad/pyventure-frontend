@@ -26,7 +26,7 @@ const PhaserGame = ({
       physics: {
         default: "arcade",
         arcade: {
-          gravity: { y: 300, x: 0 },
+          gravity: { y: 400, x: 0 },
           debug: false,
         },
       },
@@ -40,9 +40,27 @@ const PhaserGame = ({
     // Create the game instance
     gameInstanceRef.current = new Phaser.Game(config);
 
+    // Game objects
+    let player: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
+    let cursors: Phaser.Types.Input.Keyboard.CursorKeys;
+    let map: Phaser.Tilemaps.Tilemap;
+    let mainTileset: Phaser.Tilemaps.Tileset;
+    let spikeTileset: Phaser.Tilemaps.Tileset;
+    let tileset2: Phaser.Tilemaps.Tileset;
+    let platformLayer: Phaser.Tilemaps.TilemapLayer;
+    let deadlyTiles: number[];
+    let checkpointTiles: number[];
+    let solidTiles: number[];
+    let spawnX = 100;
+    let spawnY = 100;
+    let reachedCheckpoint = false;
+    let lastDirection = "idle"; // Track last movement direction
+    let currentAnimation = ""; // Track current animation to prevent constant restarting
+    const characterScale = 0.6; // Adjust this value to resize character (0.5 = half size, 2.0 = double size)
+
     // Preload game assets
     function preload(this: Phaser.Scene) {
-      // Creating a loading bar
+      // Create loading bar
       const progressBar = this.add.graphics();
       const progressBox = this.add.graphics();
       progressBox.fillStyle(0x222222, 0.8);
@@ -73,214 +91,326 @@ const PhaserGame = ({
         loadingText.destroy();
       });
 
-      // Instead of loading assets, we'll create them programmatically for testing
-      this.load.on("complete", () => {
-        // Create ground texture
-        const groundGraphics = this.make.graphics({ x: 0, y: 0 });
-        groundGraphics.fillStyle(0x663300);
-        groundGraphics.fillRect(0, 0, 100, 100);
-        groundGraphics.lineStyle(2, 0x441100);
-        groundGraphics.strokeRect(0, 0, 100, 100);
-        groundGraphics.generateTexture("ground", 100, 100);
+      // Load the CSV tilemap
+      this.load.tilemapCSV("level1", "../../public/assets/tilemaps/level1.csv");
 
-        // Create sky texture
-        const skyGraphics = this.make.graphics({ x: 0, y: 0 });
-        skyGraphics.fillGradientStyle(0x3498db, 0x3498db, 0x0a3d62, 0x0a3d62);
-        skyGraphics.fillRect(0, 0, 100, 100);
-        skyGraphics.generateTexture("sky", 100, 100);
+      // Load tileset images - matching your TMJ structure
+      this.load.image("tileset", "../../public/assets/tilesets/tileSet.jpeg"); // firstgid: 1
+      this.load.image("spike", "../../public/assets/tilesets/Spike.png"); // firstgid: 19
+      this.load.image(
+        "tileset2",
+        "../../public/assets/tilesets/python-logo.png"
+      ); // firstgid: 20
 
-        // Create star texture
-        const starGraphics = this.make.graphics({ x: 0, y: 0 });
-        starGraphics.fillStyle(0xffff00);
-        starGraphics.fillCircle(12, 12, 10);
-        starGraphics.generateTexture("star", 24, 24);
-
-        // Create checkpoint texture
-        const checkpointGraphics = this.make.graphics({
-          x: 0,
-          y: 0,
-        });
-        checkpointGraphics.fillStyle(0xff0000);
-        checkpointGraphics.fillRect(0, 0, 24, 24);
-        checkpointGraphics.generateTexture("checkpoint", 24, 24);
-      });
-
-      // Trigger the complete event manually since we're not loading external assets
-      this.load.start();
+      // Load character sprites
+      // Replace these paths with your actual character image paths
+      this.load.image(
+        "player_idle",
+        "../../public/assets/characters/player_idle.png"
+      ); // Standing/facing screen
+      this.load.image(
+        "player_walk1",
+        "../../public/assets/characters/player_walk1.png"
+      ); // Right foot forward
+      this.load.image(
+        "player_walk2",
+        "../../public/assets/characters/player_walk2.png"
+      ); // Left foot forward
+      this.load.image(
+        "player_standing",
+        "../../public/assets/characters/player_standing.png"
+      ); // Standing still
     }
-
-    // Game objects
-    let player: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
-    let stars: Phaser.Physics.Arcade.Group;
-    let checkpoints: Phaser.Physics.Arcade.StaticGroup;
-    let cursors: Phaser.Types.Input.Keyboard.CursorKeys;
-    let score = 0;
-    let scoreText: Phaser.GameObjects.Text;
-    let starCount = 0;
-    let starsCollected = 0;
-    let reachedCheckpoint = false;
-    let gameOver = false;
 
     // Create game world
     function create(this: Phaser.Scene) {
       // Reset game state
-      score = 0;
-      starsCollected = 0;
       reachedCheckpoint = false;
-      gameOver = false;
+      lastDirection = "idle";
+      currentAnimation = "";
 
-      // Add a sky background
-      this.add.image(400, 300, "sky").setDisplaySize(800, 600);
+      // Create the tilemap from CSV
+      map = this.make.tilemap({
+        key: "level1",
+        tileWidth: 32,
+        tileHeight: 32,
+      });
 
-      // Create platforms group with physics
-      const platforms = this.physics.add.staticGroup();
+      // Add tilesets with correct firstgid values matching your TMJ
+      mainTileset = map.addTilesetImage("tileset", "tileset", 32, 32, 0, 0, 0); // firstgid: 1
+      spikeTileset = map.addTilesetImage("spike", "spike", 32, 32, 0, 0, 18); // firstgid: 19
+      tileset2 = map.addTilesetImage("tileset2", "tileset2", 32, 32, 0, 0, 19); // firstgid: 20
 
-      // Create the ground
-      platforms
-        .create(400, 568, "ground")
-        .setDisplaySize(800, 32)
-        .refreshBody();
+      // Create the layer with all tilesets
+      platformLayer = map.createLayer(
+        0,
+        [mainTileset, spikeTileset, tileset2],
+        0,
+        0
+      );
 
-      // Create some platforms
-      platforms
-        .create(600, 400, "ground")
-        .setDisplaySize(200, 32)
-        .refreshBody();
-      platforms.create(50, 250, "ground").setDisplaySize(200, 32).refreshBody();
-      platforms
-        .create(750, 220, "ground")
-        .setDisplaySize(200, 32)
-        .refreshBody();
+      // Define tile types based on your CSV data
+      // From your CSV: solid tiles are 1,3,4,5,12,13,14,15,18
+      solidTiles = [1, 3, 5, 12, 13, 14, 15];
 
-      // Create player
-      player = this.physics.add.sprite(100, 450, "star").setDisplaySize(32, 32);
+      // Spike tiles (firstgid 19 in your TMJ)
+      deadlyTiles = [18, 4];
+
+      // Checkpoint tiles (firstgid 20 in your TMJ, which is your python logo)
+      checkpointTiles = [19];
+
+      // Set collision for solid tiles
+      platformLayer.setCollision(solidTiles);
+
+      // Find spawn point - look for an empty area at the start
+      spawnX = 64;
+      spawnY = 200; // Adjust based on your map layout
+
+      // Create player with idle sprite and apply scale
+      player = this.physics.add.sprite(spawnX, spawnY, "player_idle");
+      player.setScale(characterScale); // Resize the character
       player.setBounce(0.2);
       player.setCollideWorldBounds(true);
-      player.setTint(0x9b87f5);
-      player.setDamping(true);
-      player.setDrag(0.9, 0);
 
-      // Create stars
-      stars = this.physics.add.group({
-        key: "star",
-        repeat: 11,
-        setXY: { x: 12, y: 0, stepX: 70 },
+      // Fixed: Better physics settings for stopping
+      player.setDrag(600, 0); // Increased horizontal drag for quicker stopping
+      player.setMaxVelocity(120, 500); // Set max velocities
+
+      // Adjust physics body size to match the scaled sprite
+      // This ensures collision detection works properly with the resized character
+      this.physics.world.on("worldstep", () => {
+        if (player.body) {
+          const body = player.body as Phaser.Physics.Arcade.Body;
+          body.setSize(
+            player.width * characterScale, // Slightly smaller hitbox for more forgiving gameplay
+            player.height * characterScale,
+            true // Center the body
+          );
+        }
       });
 
-      starCount = stars.getChildren().length;
-
-      stars.children.iterate((child) => {
-        const c = child as Phaser.Physics.Arcade.Image;
-        c.setBounceY(Phaser.Math.FloatBetween(0.4, 0.8));
-        c.setDisplaySize(24, 24);
-        c.setTint(0xffff00);
-        return null;
+      // Create walking animation
+      this.anims.create({
+        key: "walk_right",
+        frames: [{ key: "player_walk1" }, { key: "player_walk2" }],
+        frameRate: 8, // Adjust speed of animation
+        repeat: -1, // Loop forever
       });
 
-      // Create checkpoint
-      checkpoints = this.physics.add.staticGroup();
-      const checkpoint = checkpoints.create(750, 180, "checkpoint");
-      checkpoint.setDisplaySize(32, 32);
-      checkpoint.refreshBody();
-      checkpoint.setTint(0xff0000);
-
-      // Add score text
-      scoreText = this.add.text(16, 16, "Score: 0", {
-        fontSize: "32px",
-        color: "#ffffff",
+      this.anims.create({
+        key: "walk_left",
+        frames: [{ key: "player_walk1" }, { key: "player_walk2" }],
+        frameRate: 8,
+        repeat: -1,
       });
 
-      // Add collision between player and platforms
-      this.physics.add.collider(player, platforms);
-      this.physics.add.collider(stars, platforms);
+      this.anims.create({
+        key: "idle",
+        frames: [{ key: "player_idle" }],
+        frameRate: 1,
+      });
 
-      // Check for overlap between player and stars
-      this.physics.add.overlap(
-        player,
-        stars,
-        (obj1, obj2) => {
-          // Inside this function, we know what the types should be
-          const star = obj2 as Phaser.Physics.Arcade.Image;
-          star.disableBody(true, true);
-          score += 10;
-          starsCollected++;
-          scoreText.setText("Score: " + score);
+      this.anims.create({
+        key: "standing",
+        frames: [{ key: "player_standing" }],
+        frameRate: 1,
+      });
 
-          // Check if all stars are collected
-          if (starsCollected === starCount && onCollectAllStars) {
-            onCollectAllStars();
-          }
-        },
-        undefined,
-        this
-      );
+      // Add collision between player and platform layer
+      this.physics.add.collider(player, platformLayer);
 
-      // Check for overlap between player and checkpoint
-      this.physics.add.overlap(
-        player,
-        checkpoints,
-        () => {
-          if (!reachedCheckpoint) {
-            reachedCheckpoint = true;
-            checkpoint.setTint(0x00ff00);
-            onReachCheckpoint();
+      // Check for deadly tiles (spikes)
+      this.physics.add.overlap(player, platformLayer, (playerObj, tile) => {
+        const tileObj = tile as Phaser.Tilemaps.Tile;
 
-            // Create completion text
-            if (starsCollected === starCount) {
-              const completionText = this.add.text(
-                400,
-                300,
-                "Level Complete!",
-                { fontSize: "48px", color: "#ffffff" }
-              );
-              completionText.setOrigin(0.5);
-              completionText.setShadow(2, 2, "#000000", 2);
+        if (
+          deadlyTiles.includes(tileObj.index) &&
+          playerObj instanceof Phaser.Physics.Arcade.Sprite
+        ) {
+          // Shake and flash
+          this.cameras.main.shake(250, 0.02);
+          this.cameras.main.flash(250, 255, 0, 0);
 
-              // Make it flash
-              this.tweens.add({
-                targets: completionText,
-                alpha: { from: 1, to: 0.5 },
-                yoyo: true,
-                repeat: -1,
-                duration: 500,
-              });
+          // Create red overlay
+          // Create red overlay that always fills the screen
+          const redOverlay = this.add
+            .rectangle(
+              0,
+              0,
+              this.cameras.main.width,
+              this.cameras.main.height,
+              0xff0000,
+              0.3
+            )
+            .setOrigin(0)
+            .setScrollFactor(0)
+            .setDepth(1000); // Ensure it's above everything
 
-              gameOver = true;
+          // Show "You Died!" text centered on screen
+          const deathText = this.add
+            .text(
+              this.cameras.main.width / 2,
+              this.cameras.main.height / 2,
+              "You Died!",
+              {
+                fontSize: "40px",
+                color: "#ff0000",
+                fontStyle: "bold",
+                stroke: "#000",
+                strokeThickness: 4,
+              }
+            )
+            .setOrigin(0.5)
+            .setScrollFactor(0)
+            .setDepth(1001); // Make sure it's above the overlay
+
+          // Freeze player
+          playerObj.body.enable = false;
+
+          this.time.delayedCall(1000, () => {
+            playerObj.setPosition(spawnX, spawnY - 10); // Slightly above the ground
+            playerObj.setVelocity(0, 0);
+            playerObj.setTexture("player_idle");
+            playerObj.setScale(characterScale);
+            currentAnimation = "";
+
+            this.time.delayedCall(50, () => {
+              playerObj.body.enable = true; // Re-enable after short delay
+            });
+
+            redOverlay.destroy();
+            deathText.destroy();
+          });
+        }
+      });
+
+      // Check for checkpoint tiles (python logo)
+      this.physics.add.overlap(player, platformLayer, (player, tile) => {
+        const tileObj = tile as Phaser.Tilemaps.Tile;
+        if (checkpointTiles.includes(tileObj.index) && !reachedCheckpoint) {
+          reachedCheckpoint = true;
+
+          // Visual feedback for reaching checkpoint
+          this.cameras.main.flash(500, 0, 255, 0);
+
+          // Change checkpoint tile color
+          tileObj.tint = 0x00ff00;
+
+          // Create completion text
+          const completionText = this.add.text(
+            400,
+            100,
+            "Checkpoint Reached!",
+            {
+              fontSize: "32px",
+              color: "#00ff00",
+              fontStyle: "bold",
             }
-          }
-        },
-        undefined,
-        this
-      );
+          );
+          completionText.setOrigin(0.5);
+          completionText.setShadow(2, 2, "#000000", 2);
+
+          // Make it flash
+          this.tweens.add({
+            targets: completionText,
+            alpha: { from: 1, to: 0.5 },
+            yoyo: true,
+            repeat: 3,
+            duration: 300,
+            onComplete: () => {
+              completionText.destroy();
+            },
+          });
+
+          onReachCheckpoint();
+        }
+      });
 
       // Input
       cursors = this.input.keyboard.createCursorKeys();
+
+      // Camera follows player
+      this.cameras.main.startFollow(player);
+      this.cameras.main.setBounds(0, 0, map.widthInPixels, map.heightInPixels);
+
+      // Add instructions
+      // Display on-screen instructions
+      const instructions = this.add
+        .text(16, 16, "", {
+          font: "16px monospace",
+          color: "#ffffff",
+          backgroundColor: "rgba(0,0,0,0.5)",
+          padding: { x: 10, y: 6 },
+          wordWrap: { width: 770 },
+        })
+        .setScrollFactor(0); // Fix text to camera
+
+      instructions.setText([
+        "Controls:",
+        "← → Arrow keys to move",
+        "↑ Arrow key to jump",
+        "⚠️ Avoid the spikes!",
+        "🐍 Find the Python logo!",
+      ]);
     }
 
     // Game loop
     function update(this: Phaser.Scene) {
-      if (gameOver) return;
-
-      // Player movement - improved with acceleration
-      const acceleration = 800;
-      const maxSpeed = 160;
+      // Player movement
+      const acceleration = 400; // Increased for more responsive movement
 
       if (cursors.left.isDown) {
         player.setAccelerationX(-acceleration);
-        if (player.body.velocity.x < -maxSpeed) {
-          player.setVelocityX(-maxSpeed);
+
+        // Handle animation and flipping for left movement
+        if (currentAnimation !== "walk_left") {
+          player.play("walk_left");
+          player.setFlipX(true); // Flip sprite to face left
+          currentAnimation = "walk_left";
         }
+        lastDirection = "left";
       } else if (cursors.right.isDown) {
         player.setAccelerationX(acceleration);
-        if (player.body.velocity.x > maxSpeed) {
-          player.setVelocityX(maxSpeed);
+
+        // Handle animation for right movement
+        if (currentAnimation !== "walk_right") {
+          player.play("walk_right");
+          player.setFlipX(false); // Don't flip sprite for right movement
+          currentAnimation = "walk_right";
         }
+        lastDirection = "right";
       } else {
+        // Fixed: Set acceleration to 0 for immediate stopping effect
         player.setAccelerationX(0);
+
+        // Handle idle animation - only change if we're on ground and not already idle
+        if (player.body.blocked.down && currentAnimation !== "idle") {
+          player.play("idle");
+          currentAnimation = "idle";
+        }
+
+        // If player is moving very slowly, stop them completely
+        if (Math.abs(player.body.velocity.x) < 5) {
+          player.setVelocityX(0);
+        }
       }
 
-      if (cursors.up.isDown && player.body.touching.down) {
-        player.setVelocityY(-330);
+      // Jumping
+      if (cursors.up.isDown && player.body.blocked.down) {
+        player.setVelocityY(-300);
+        // You could add a jumping sprite here if you have one
+        // player.setTexture("player_jump");
+      }
+
+      // Check if player fell off the world
+      if (player.y > map.heightInPixels + 100) {
+        // Respawn player
+        player.setPosition(spawnX, spawnY);
+        player.setVelocity(0, 0);
+        player.setTexture("player_idle");
+        player.setScale(characterScale); // Maintain scale after respawn
+        lastDirection = "idle";
+        currentAnimation = ""; // Reset animation tracking
       }
     }
 
@@ -296,12 +426,6 @@ const PhaserGame = ({
   return (
     <div className="relative">
       <div ref={gameContainerRef} className="w-full h-full" />
-      <div className="absolute bottom-4 left-4 bg-black/50 p-2 rounded-md">
-        <div className="text-sm text-white">
-          <p>Use arrow keys to move</p>
-          <p>Collect stars and reach the red checkpoint</p>
-        </div>
-      </div>
     </div>
   );
 };
