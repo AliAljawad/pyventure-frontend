@@ -53,6 +53,7 @@ const PhaserGame = ({
     let map: Phaser.Tilemaps.Tilemap;
     let mainTileset: Phaser.Tilemaps.Tileset;
     let spikeTileset: Phaser.Tilemaps.Tileset;
+    let rocketTileset: Phaser.Tilemaps.Tileset;
     let tileset2: Phaser.Tilemaps.Tileset;
     let platformLayer: Phaser.Tilemaps.TilemapLayer;
     let deadlyTiles: number[];
@@ -101,35 +102,24 @@ const PhaserGame = ({
       // Load the CSV tilemap based on level
       this.load.tilemapCSV(
         `level${level}`,
-        `../../public/assets/tilemaps/level${level}.csv`
+        `assets/tilemaps/level${level}.csv`
       );
 
       // Load tileset images - matching your TMJ structure
-      this.load.image("tileset", "../../public/assets/tilesets/tileSet.jpeg"); // firstgid: 1
-      this.load.image("spike", "../../public/assets/tilesets/Spike.png"); // firstgid: 19
-      this.load.image(
-        "tileset2",
-        "../../public/assets/tilesets/python-logo.png"
-      ); // firstgid: 20
+      this.load.image("tileset", "assets/tilesets/tileSet.jpeg"); // firstgid: 1
+      this.load.image("spike", "assets/tilesets/Spike.png"); // firstgid: 19
+      this.load.image("tileset2", "assets/tilesets/python-logo.png"); // firstgid: 20
 
       // Load character sprites
       // Replace these paths with your actual character image paths
-      this.load.image(
-        "player_idle",
-        "../../public/assets/characters/player_idle.png"
-      ); // Standing/facing screen
-      this.load.image(
-        "player_walk1",
-        "../../public/assets/characters/player_walk1.png"
-      ); // Right foot forward
-      this.load.image(
-        "player_walk2",
-        "../../public/assets/characters/player_walk2.png"
-      ); // Left foot forward
+      this.load.image("player_idle", "assets/characters/player_idle.png"); // Standing/facing screen
+      this.load.image("player_walk1", "assets/characters/player_walk1.png"); // Right foot forward
+      this.load.image("player_walk2", "assets/characters/player_walk2.png"); // Left foot forward
       this.load.image(
         "player_standing",
-        "../../public/assets/characters/player_standing.png"
+        "assets/characters/player_standing.png"
       ); // Standing still
+      this.load.image("rocket", "assets/tilesets/rocket.png");
     }
 
     // Enhanced smoke particle effect with more particles and variety
@@ -256,7 +246,6 @@ const PhaserGame = ({
       scene: Phaser.Scene,
       playerObj: Phaser.Physics.Arcade.Sprite
     ) {
-      
       // Create enhanced smoke effect at player position
       createEnhancedSmokeEffect(scene, playerObj.x, playerObj.y);
 
@@ -310,18 +299,24 @@ const PhaserGame = ({
       mainTileset = map.addTilesetImage("tileset", "tileset", 32, 32, 0, 0, 0); // firstgid: 1
       spikeTileset = map.addTilesetImage("spike", "spike", 32, 32, 0, 0, 18); // firstgid: 19
       tileset2 = map.addTilesetImage("tileset2", "tileset2", 32, 32, 0, 0, 19); // firstgid: 20
+      rocketTileset = map.addTilesetImage("rocket", "rocket", 32, 32, 0, 0, 20); // firstgid: 21
 
       // Create the layer with all tilesets
       platformLayer = map.createLayer(
         0,
-        [mainTileset, spikeTileset, tileset2],
+        [mainTileset, spikeTileset, tileset2, rocketTileset],
         0,
         0
       );
 
       // Define tile types based on your CSV data
       // From your CSV: solid tiles are 1,3,4,5,12,13,14,15,18
-      solidTiles = [1, 3, 5, 12, 13, 14, 15];
+      solidTiles = [
+        1, 3, 5, 6, 12, 13, 14, 11, 15, 25, 26, 27, 28, 33, 34, 35, 36, 42, 43,
+        44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61,
+        62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79,
+        80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91,
+      ];
 
       // Spike tiles (firstgid 19 in your TMJ)
       deadlyTiles = [18, 4];

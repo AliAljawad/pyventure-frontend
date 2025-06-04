@@ -24,7 +24,7 @@ const Playground = () => {
 
   // Game state
   const [gameState, setGameState] = useState<GameState>("level-select");
-  const [showCodeEditor, setShowCodeEditor] = useState(false);
+  const [showCodeEditor, setShowCodeEditor] = useState(true);
   const [selectedLevel, setSelectedLevel] = useState<number>(1);
 
   // Mock level data - in a real app, this would come from a database or local storage
