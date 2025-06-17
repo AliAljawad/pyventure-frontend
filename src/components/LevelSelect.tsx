@@ -5,14 +5,15 @@ export interface Level {
   id: number;
   title: string;
   description: string;
-  difficulty: "beginner" | "intermediate" | "advanced";
+  difficulty: string;
   theme: string;
   isUnlocked: boolean;
   isCompleted: boolean;
-  stars: number; // 0-3 stars based on performance
+  stars: number;
 }
 
-interface LevelSelectProps {
+export interface LevelSelectProps {
+  levels: Level[];
   onSelectLevel: (levelId: number) => void;
 }
 

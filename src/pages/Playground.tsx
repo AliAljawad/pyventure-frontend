@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import apiService from "@/api/code-editor";
 
 // Game states
 type GameState = "level-select" | "level-info" | "playing";
@@ -24,7 +25,7 @@ const Playground = () => {
 
   // Game state
   const [gameState, setGameState] = useState<GameState>("level-select");
-  const [showCodeEditor, setShowCodeEditor] = useState(true);
+  const [showCodeEditor, setShowCodeEditor] = useState(false);
   const [selectedLevel, setSelectedLevel] = useState<number>(1);
 
   // Mock level data - in a real app, this would come from a database or local storage
@@ -50,8 +51,96 @@ const Playground = () => {
       isCompleted: false,
       stars: 0,
     },
-    // More levels initialized in LevelSelect component
+    {
+      id: 3,
+      title: "Conditional Cosmos",
+      description: "Navigate through space using if/else statements",
+      difficulty: "beginner",
+      theme: "cosmic",
+      isUnlocked: false,
+      isCompleted: false,
+      stars: 0,
+    },
+    {
+      id: 4,
+      title: "Loop Laboratory",
+      description: "Master loops in the space laboratory",
+      difficulty: "intermediate",
+      theme: "lab",
+      isUnlocked: false,
+      isCompleted: false,
+      stars: 0,
+    },
+    {
+      id: 5,
+      title: "Function Fortress",
+      description: "Build functions in the cosmic fortress",
+      difficulty: "intermediate",
+      theme: "fortress",
+      isUnlocked: false,
+      isCompleted: false,
+      stars: 0,
+    },
+    {
+      id: 6,
+      title: "Data Structure Dimension",
+      description: "Explore lists and dictionaries in another dimension",
+      difficulty: "intermediate",
+      theme: "dimension",
+      isUnlocked: false,
+      isCompleted: false,
+      stars: 0,
+    },
+    {
+      id: 7,
+      title: "String Solar System",
+      description: "Manipulate strings across the solar system",
+      difficulty: "advanced",
+      theme: "solar",
+      isUnlocked: false,
+      isCompleted: false,
+      stars: 0,
+    },
+    {
+      id: 8,
+      title: "Error Handling Enterprise",
+      description: "Handle errors aboard the space enterprise",
+      difficulty: "advanced",
+      theme: "enterprise",
+      isUnlocked: false,
+      isCompleted: false,
+      stars: 0,
+    },
   ]);
+
+  // Load user progress on component mount
+  useEffect(() => {
+    loadUserProgress();
+  }, []);
+
+  const loadUserProgress = async () => {
+    try {
+      const progress = await apiService.backend.getUserProgress();
+      // Update levels based on user progress
+      setLevels((prevLevels) =>
+        prevLevels.map((level) => {
+          const userProgress = progress.find((p) => p.level_id === level.id);
+          if (userProgress) {
+            return {
+              ...level,
+              isCompleted: userProgress.is_completed,
+              stars: Math.floor(userProgress.score / 34), // Convert score to stars (0-3)
+              isUnlocked: true, // If user has progress, level is unlocked
+            };
+          }
+          return level;
+        })
+      );
+    } catch (error) {
+      console.error("Failed to load user progress:", error);
+      // Continue with default levels if progress can't be loaded
+    }
+  };
 
   // Handle level selection
   const handleSelectLevel = (levelId: number) => {
@@ -67,6 +156,7 @@ const Playground = () => {
   // Handle back to level selection
   const handleBackToLevels = () => {
     setGameState("level-select");
+    setShowCodeEditor(false);
   };
 
   // Handle checkpoint reached
@@ -79,18 +169,46 @@ const Playground = () => {
     setTimeout(() => {
       setShowCodeEditor(true);
     }, 1500);
+  };
 
-    // Update level progress (in a real app, you'd save this to storage/database)
-    setLevels((prevLevels) =>
-      prevLevels.map((level) => {
-        if (level.id === selectedLevel) {
-          return { ...level, isCompleted: true, stars: 2 };
-        } else if (level.id === selectedLevel + 1) {
-          return { ...level, isUnlocked: true };
-        }
-        return level;
-      })
-    );
+  // Handle level completion from CodeEditor
+  const handleLevelComplete = async (levelId: number, score: number) => {
+    try {
+      // Update local state
+      setLevels((prevLevels) =>
+        prevLevels.map((level) => {
+          if (level.id === levelId) {
+            return {
+              ...level,
+              isCompleted: true,
+              stars: Math.floor(score / 34), // Convert score to stars
+            };
+          } else if (level.id === levelId + 1) {
+            return { ...level, isUnlocked: true };
+          }
+          return level;
+        })
+      );
+
+      // Show success message
+      toast.success("Level completed successfully!", {
+        description: `Great job! Level ${levelId + 1} is now unlocked.`,
+        duration: 5000,
+      });
+
+      // Close code editor and return to level select after a delay
+      setTimeout(() => {
+        setShowCodeEditor(false);
+        setTimeout(() => {
+          setGameState("level-select");
+        }, 500);
+      }, 2000);
+    } catch (error) {
+      console.error("Failed to complete level:", error);
+      toast.error("Failed to save progress", {
+        description: "Your solution was correct but couldn't be saved.",
+      });
+    }
   };
 
   // Handle code editor close - return to level selection
@@ -118,7 +236,7 @@ const Playground = () => {
 
           {gameState === "level-select" && (
             <div>
-              <LevelSelect onSelectLevel={handleSelectLevel} />
+              <LevelSelect levels={levels} onSelectLevel={handleSelectLevel} />
             </div>
           )}
 
@@ -135,7 +253,7 @@ const Playground = () => {
               <div className="flex justify-between items-center mb-4">
                 <button
                   onClick={handleBackToLevels}
-                  className="text-gray-300 hover:text-white flex items-center"
+                  className="text-gray-300 hover:text-white flex items-center transition-colors"
                 >
                   <span className="mr-2">←</span> Back to Levels
                 </button>
@@ -169,27 +287,25 @@ const Playground = () => {
 
           {/* Dialog for code editor */}
           <Dialog open={showCodeEditor} onOpenChange={setShowCodeEditor}>
-            <DialogContent className="max-w-4xl bg-space-dark-blue border-space-nebula/30">
+            <DialogContent className="max-w-6xl bg-space-dark-blue border-space-nebula/30">
               <DialogHeader>
                 <DialogTitle className="text-2xl font-bold text-white">
                   Python Challenge - Level {selectedLevel}
                 </DialogTitle>
               </DialogHeader>
               <div className="py-4">
-                <CodeEditor />
+                <CodeEditor
+                  levelId={selectedLevel}
+                  onLevelComplete={handleLevelComplete}
+                  onClose={handleCodeEditorClose}
+                />
               </div>
               <div className="flex justify-end space-x-3 mt-2">
                 <button
-                  className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600"
+                  className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600 transition-colors"
                   onClick={handleCodeEditorClose}
                 >
                   Close
-                </button>
-                <button
-                  className="px-4 py-2 bg-space-nebula text-white rounded hover:bg-space-nebula/80"
-                  onClick={handleCodeEditorClose}
-                >
-                  Submit & Continue
                 </button>
               </div>
             </DialogContent>

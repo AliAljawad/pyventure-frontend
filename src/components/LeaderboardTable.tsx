@@ -21,53 +21,50 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import axios from "axios";
 
-type TimeFrame = "allTime" | "weekly" | "daily";
 type SortField = "score" | "levels" | "attempts";
 
-interface LeaderboardUser {
-  id: number;
-  username: string;
-  rank: string | null;
-  total_score: number;
-  total_completed_levels: number;
-  total_attempts: number;
-  time_spent: number;
-  achievements: string[];
-  progress: number;
+interface LeaderboardEntry {
+  rank: number;
+  user: {
+    id: number;
+    name: string;
+    username: string;
+    rank: string;
+  };
+  stats: {
+    total_score: number;
+    total_completed_levels: number;
+    total_attempts: number;
+  };
+  progress?: number;
 }
 
 const LeaderboardTable = () => {
-  const [timeFrame, setTimeFrame] = useState<TimeFrame>("allTime");
   const [sortField, setSortField] = useState<SortField>("score");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [isLoading, setIsLoading] = useState(false);
-  const [users, setUsers] = useState<LeaderboardUser[]>([]);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
 
   const fetchLeaderboard = async () => {
     try {
       setIsLoading(true);
-      const response = await axios.get(
-        `http://127.0.0.1:8000/api/leaderboard`,
-        {
-          params: {
-            timeFrame,
-            sortBy: sortField,
-            limit: 10,
-          },
-        }
-      );
+      const response = await axios.get(`http://127.0.0.1:8000/api/leaderboard`, {
+        params: {
+          limit: 50,
+        },
+      });
 
       // Calculate progress based on the highest score
       const maxScore = Math.max(
-        ...response.data.users.map((user: any) => user.total_score)
+        ...response.data.map((entry: LeaderboardEntry) => entry.stats.total_score)
       );
-      const usersWithProgress = response.data.users.map((user: any) => ({
-        ...user,
-        progress:
-          maxScore > 0 ? Math.round((user.total_score / maxScore) * 100) : 0,
+      
+      const leaderboardWithProgress = response.data.map((entry: LeaderboardEntry) => ({
+        ...entry,
+        progress: maxScore > 0 ? Math.round((entry.stats.total_score / maxScore) * 100) : 0,
       }));
 
-      setUsers(usersWithProgress);
+      setLeaderboard(leaderboardWithProgress);
     } catch (error) {
       console.error("Error fetching leaderboard:", error);
       toast.error("Failed to fetch leaderboard data");
@@ -78,7 +75,7 @@ const LeaderboardTable = () => {
 
   useEffect(() => {
     fetchLeaderboard();
-  }, [timeFrame, sortField, sortDirection]);
+  }, []);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -87,16 +84,41 @@ const LeaderboardTable = () => {
       setSortField(field);
       setSortDirection("desc");
     }
+
+    // Sort the leaderboard based on the selected field
+    const sortedLeaderboard = [...leaderboard].sort((a, b) => {
+      let aValue, bValue;
+      
+      switch (field) {
+        case "score":
+          aValue = a.stats.total_score;
+          bValue = b.stats.total_score;
+          break;
+        case "levels":
+          aValue = a.stats.total_completed_levels;
+          bValue = b.stats.total_completed_levels;
+          break;
+        case "attempts":
+          aValue = a.stats.total_attempts;
+          bValue = b.stats.total_attempts;
+          break;
+        default:
+          aValue = a.stats.total_score;
+          bValue = b.stats.total_score;
+      }
+
+      if (sortDirection === "asc") {
+        return aValue - bValue;
+      } else {
+        return bValue - aValue;
+      }
+    });
+
+    setLeaderboard(sortedLeaderboard);
   };
 
   const handleRefresh = () => {
     fetchLeaderboard();
-  };
-
-  const formatTimeSpent = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    return `${hours}h ${minutes}m`;
   };
 
   return (
@@ -112,45 +134,6 @@ const LeaderboardTable = () => {
         </div>
 
         <div className="flex flex-col sm:flex-row gap-4">
-          <div className="flex rounded-lg overflow-hidden border border-space-nebula/20">
-            <Button
-              onClick={() => setTimeFrame("allTime")}
-              variant="ghost"
-              className={cn(
-                "rounded-none",
-                timeFrame === "allTime"
-                  ? "bg-space-nebula text-white"
-                  : "text-gray-400 hover:text-white"
-              )}
-            >
-              All Time
-            </Button>
-            <Button
-              onClick={() => setTimeFrame("weekly")}
-              variant="ghost"
-              className={cn(
-                "rounded-none",
-                timeFrame === "weekly"
-                  ? "bg-space-nebula text-white"
-                  : "text-gray-400 hover:text-white"
-              )}
-            >
-              Weekly
-            </Button>
-            <Button
-              onClick={() => setTimeFrame("daily")}
-              variant="ghost"
-              className={cn(
-                "rounded-none",
-                timeFrame === "daily"
-                  ? "bg-space-nebula text-white"
-                  : "text-gray-400 hover:text-white"
-              )}
-            >
-              Daily
-            </Button>
-          </div>
-
           <Button
             onClick={handleRefresh}
             variant="outline"
@@ -227,9 +210,9 @@ const LeaderboardTable = () => {
               </tr>
             </thead>
             <tbody>
-              {users.map((user, index) => (
+              {leaderboard.map((entry, index) => (
                 <tr
-                  key={user.id}
+                  key={entry.user.id}
                   className={cn(
                     "hover:bg-space-nebula/10 transition-colors",
                     index % 2 === 0 ? "bg-space-deep-purple/10" : ""
@@ -237,28 +220,28 @@ const LeaderboardTable = () => {
                 >
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      {index === 0 && (
+                      {entry.rank === 1 && (
                         <Trophy className="h-5 w-5 text-yellow-400 mr-2" />
                       )}
-                      {index === 1 && (
+                      {entry.rank === 2 && (
                         <Medal className="h-5 w-5 text-gray-300 mr-2" />
                       )}
-                      {index === 2 && (
+                      {entry.rank === 3 && (
                         <Medal className="h-5 w-5 text-amber-700 mr-2" />
                       )}
                       <span
                         className={cn(
                           "font-medium",
-                          index === 0
+                          entry.rank === 1
                             ? "text-yellow-400"
-                            : index === 1
+                            : entry.rank === 2
                             ? "text-gray-300"
-                            : index === 2
+                            : entry.rank === 3
                             ? "text-amber-700"
                             : "text-white"
                         )}
                       >
-                        {index + 1}
+                        {entry.rank}
                       </span>
                     </div>
                   </td>
@@ -270,24 +253,24 @@ const LeaderboardTable = () => {
                             <div className="relative">
                               <Avatar className="h-8 w-8 mr-3 border border-space-nebula/30">
                                 <AvatarFallback className="bg-space-deep-purple text-white">
-                                  {user.username.slice(0, 2).toUpperCase()}
+                                  {entry.user.username.slice(0, 2).toUpperCase()}
                                 </AvatarFallback>
                                 <AvatarImage
-                                  src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${user.username}`}
+                                  src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${entry.user.username}`}
                                 />
                               </Avatar>
-                              {index < 3 && (
+                              {entry.rank <= 3 && (
                                 <div
                                   className={cn(
                                     "absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[10px]",
-                                    index === 0
+                                    entry.rank === 1
                                       ? "bg-yellow-400"
-                                      : index === 1
+                                      : entry.rank === 2
                                       ? "bg-gray-300"
                                       : "bg-amber-700"
                                   )}
                                 >
-                                  {index + 1}
+                                  {entry.rank}
                                 </div>
                               )}
                             </div>
@@ -296,61 +279,52 @@ const LeaderboardTable = () => {
                             <div className="flex items-center">
                               <Avatar className="h-10 w-10 mr-3">
                                 <AvatarFallback>
-                                  {user.username.slice(0, 2).toUpperCase()}
+                                  {entry.user.username.slice(0, 2).toUpperCase()}
                                 </AvatarFallback>
                                 <AvatarImage
-                                  src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${user.username}`}
+                                  src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${entry.user.username}`}
                                 />
                               </Avatar>
                               <div>
-                                <p className="font-bold">{user.username}</p>
+                                <p className="font-bold">{entry.user.name}</p>
                                 <p className="text-xs text-gray-400">
-                                  {user.rank || "Explorer"} •{" "}
-                                  {formatTimeSpent(user.time_spent)}
+                                  @{entry.user.username}
                                 </p>
-                              </div>
-                            </div>
-                            <div className="mt-2">
-                              <p className="text-xs font-medium mb-1">
-                                Achievements:
-                              </p>
-                              <div className="flex flex-wrap gap-1">
-                                {user.achievements.map((achievement) => (
-                                  <Badge
-                                    key={achievement}
-                                    variant="secondary"
-                                    className="text-[10px]"
-                                  >
-                                    {achievement}
-                                  </Badge>
-                                ))}
+                                <p className="text-xs text-gray-400">
+                                  {entry.user.rank}
+                                </p>
                               </div>
                             </div>
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
-                      <span className="font-medium text-white">
-                        {user.username}
-                      </span>
+                      <div>
+                        <span className="font-medium text-white">
+                          {entry.user.name}
+                        </span>
+                        <p className="text-xs text-gray-400">
+                          @{entry.user.username}
+                        </p>
+                      </div>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className="text-white">
-                      {user.total_score.toLocaleString()}
+                      {entry.stats.total_score.toLocaleString()}
                     </span>
                     <span className="text-space-nebula text-xs ml-1">pts</span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <div className="w-8 h-8 rounded-full bg-space-deep-purple flex items-center justify-center text-sm mr-2">
-                        {user.total_completed_levels}
+                        {entry.stats.total_completed_levels}
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <span className="text-white mr-1">
-                        {user.total_attempts}
+                        {entry.stats.total_attempts}
                       </span>
                       <span className="text-space-neon-pink">attempts</span>
                     </div>
@@ -360,11 +334,11 @@ const LeaderboardTable = () => {
                       <div className="w-full bg-space-deep-purple/30 rounded-full h-2.5 mr-2 max-w-[100px]">
                         <div
                           className="bg-gradient-to-r from-space-nebula to-space-neon-cyan h-2.5 rounded-full"
-                          style={{ width: `${user.progress}%` }}
+                          style={{ width: `${entry.progress || 0}%` }}
                         ></div>
                       </div>
                       <span className="text-white text-xs">
-                        {user.progress}%
+                        {entry.progress || 0}%
                       </span>
                     </div>
                   </td>
@@ -378,7 +352,7 @@ const LeaderboardTable = () => {
       <div className="flex justify-between items-center mt-6">
         <p className="text-sm text-gray-400 flex items-center">
           <Info className="h-4 w-4 mr-1" />
-          Rankings update every 24 hours
+          Rankings update in real-time
         </p>
       </div>
     </div>
