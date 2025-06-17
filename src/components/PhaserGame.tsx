@@ -66,6 +66,15 @@ const PhaserGame = ({
     let currentAnimation = ""; // Track current animation to prevent constant restarting
     const characterScale = 0.6; // Adjust this value to resize character (0.5 = half size, 2.0 = double size)
 
+    // Sound objects
+    let checkpointSound: Phaser.Sound.BaseSound;
+    let runningSound: Phaser.Sound.BaseSound;
+    let deathSound: Phaser.Sound.BaseSound;
+    let jumpSound: Phaser.Sound.BaseSound;
+    let backgroundMusic: Phaser.Sound.BaseSound;
+    let isRunning = false; // Track if running sound is playing
+    let musicKey: string; // Track which music is playing
+
     // Preload game assets
     function preload(this: Phaser.Scene) {
       // Create loading bar
@@ -120,6 +129,19 @@ const PhaserGame = ({
         "assets/characters/player_standing.png"
       ); // Standing still
       this.load.image("rocket", "assets/tilesets/rocket.png");
+      this.load.image("background", "assets/bg.png");
+
+      // Load sound files
+      // Update these paths to match your actual sound file locations
+      this.load.audio("checkpoint", "assets/sounds/checkpoint.mp3"); // or .mp3, .ogg
+      this.load.audio("running", "assets/sounds/running.mp3");
+      this.load.audio("death", "assets/sounds/death.mp3");
+      this.load.audio("jump", "assets/sounds/jumping.mp3");
+
+      // Load background music files
+
+      // Or use a single background music file for all levels
+      this.load.audio("bgMusicMain", "assets/sounds/bg-music.mp3");
     }
 
     // Enhanced smoke particle effect with more particles and variety
@@ -246,6 +268,26 @@ const PhaserGame = ({
       scene: Phaser.Scene,
       playerObj: Phaser.Physics.Arcade.Sprite
     ) {
+      // Stop running sound if playing
+      if (runningSound && runningSound.isPlaying) {
+        runningSound.stop();
+        isRunning = false;
+      }
+
+      // Stop and restart background music
+      if (backgroundMusic && backgroundMusic.isPlaying) {
+        backgroundMusic.stop();
+        // Restart the background music after a brief delay
+        scene.time.delayedCall(500, () => {
+          startBackgroundMusic(scene);
+        });
+      }
+
+      // Play death sound
+      if (deathSound) {
+        deathSound.play();
+      }
+
       // Create enhanced smoke effect at player position
       createEnhancedSmokeEffect(scene, playerObj.x, playerObj.y);
 
@@ -281,12 +323,65 @@ const PhaserGame = ({
       });
     }
 
+    // Function to start background music
+    function startBackgroundMusic(scene: Phaser.Scene) {
+      // Stop any currently playing music
+      if (backgroundMusic && backgroundMusic.isPlaying) {
+        backgroundMusic.stop();
+      }
+
+      // Determine which music to play based on level
+      // You can customize this logic based on your needs
+
+      musicKey = "bgMusicMain"; // Default music for higher levels
+
+      // Try to play level-specific music, fall back to main music if not available
+      try {
+        backgroundMusic = scene.sound.add(musicKey, {
+          volume: 0.3, // Adjust volume (0.0 to 1.0)
+          loop: true, // Loop the music
+        });
+        backgroundMusic.play();
+      } catch (error) {
+        // If level-specific music doesn't exist, use main background music
+        try {
+          backgroundMusic = scene.sound.add("bgMusicMain", {
+            volume: 0.3,
+            loop: true,
+          });
+          backgroundMusic.play();
+        } catch (fallbackError) {
+          console.warn("Background music not available");
+        }
+      }
+    }
+
+    // Function to stop background music
+    function stopBackgroundMusic() {
+      if (backgroundMusic && backgroundMusic.isPlaying) {
+        backgroundMusic.stop();
+      }
+    }
+
     // Create game world
     function create(this: Phaser.Scene) {
       // Reset game state
       reachedCheckpoint = false;
       lastDirection = "idle";
       currentAnimation = "";
+      isRunning = false;
+
+      // Initialize sounds
+      checkpointSound = this.sound.add("checkpoint", { volume: 0.7 });
+      runningSound = this.sound.add("running", {
+        volume: 0.7,
+        loop: true, // Loop the running sound
+      });
+      deathSound = this.sound.add("death", { volume: 0.8 });
+      jumpSound = this.sound.add("jump", { volume: 2 });
+
+      // Start background music
+      startBackgroundMusic(this);
 
       // Create the tilemap from CSV
       map = this.make.tilemap({
@@ -294,6 +389,11 @@ const PhaserGame = ({
         tileWidth: 32,
         tileHeight: 32,
       });
+
+      const background = this.add.image(0, 0, "background");
+      background.setOrigin(0, 0); // Set origin to top-left
+      background.setDisplaySize(map.widthInPixels, map.heightInPixels); // Scale to match map size
+      background.setDepth(-1); // Put it behind everything else
 
       // Add tilesets with correct firstgid values matching your TMJ
       mainTileset = map.addTilesetImage("tileset", "tileset", 32, 32, 0, 0, 0); // firstgid: 1
@@ -402,12 +502,36 @@ const PhaserGame = ({
         const tileObj = tile as Phaser.Tilemaps.Tile;
         if (checkpointTiles.includes(tileObj.index) && !reachedCheckpoint) {
           reachedCheckpoint = true;
+
+          // Play checkpoint sound
+          if (checkpointSound) {
+            checkpointSound.play();
+          }
+
+          // Stop running sound if playing
+          if (runningSound && runningSound.isPlaying) {
+            runningSound.stop();
+            isRunning = false;
+          }
+
           stableOnReachCheckpoint();
         }
       });
 
       // Input
       cursors = this.input.keyboard.createCursorKeys();
+
+      // Add music control keys (M to mute/unmute)
+      const keyM = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M);
+      keyM.on("down", () => {
+        if (backgroundMusic) {
+          if (backgroundMusic.isPlaying) {
+            backgroundMusic.pause();
+          } else {
+            backgroundMusic.resume();
+          }
+        }
+      });
 
       // Camera follows player
       this.cameras.main.startFollow(player);
@@ -429,6 +553,7 @@ const PhaserGame = ({
         "Controls:",
         "← → Arrow keys to move",
         "↑ Arrow key to jump",
+        "M to mute/unmute music",
         "⚠️ Avoid the spikes!",
         "🐍 Find the Python logo!",
       ]);
@@ -465,6 +590,14 @@ const PhaserGame = ({
       if (cursors.left.isDown) {
         player.setAccelerationX(-acceleration);
 
+        // Handle running sound
+        if (!isRunning && player.body.blocked.down) {
+          if (runningSound) {
+            runningSound.play();
+            isRunning = true;
+          }
+        }
+
         // Handle animation and flipping for left movement
         if (currentAnimation !== "walk_left") {
           player.play("walk_left");
@@ -474,6 +607,14 @@ const PhaserGame = ({
         lastDirection = "left";
       } else if (cursors.right.isDown) {
         player.setAccelerationX(acceleration);
+
+        // Handle running sound
+        if (!isRunning && player.body.blocked.down) {
+          if (runningSound) {
+            runningSound.play();
+            isRunning = true;
+          }
+        }
 
         // Handle animation for right movement
         if (currentAnimation !== "walk_right") {
@@ -485,6 +626,12 @@ const PhaserGame = ({
       } else {
         // Fixed: Set acceleration to 0 for immediate stopping effect
         player.setAccelerationX(0);
+
+        // Stop running sound when not moving
+        if (isRunning && runningSound && runningSound.isPlaying) {
+          runningSound.stop();
+          isRunning = false;
+        }
 
         // Handle idle animation - only change if we're on ground and not already idle
         if (player.body.blocked.down && currentAnimation !== "idle") {
@@ -501,8 +648,31 @@ const PhaserGame = ({
       // Jumping
       if (cursors.up.isDown && player.body.blocked.down) {
         player.setVelocityY(-300);
+
+        // Play jump sound
+        if (jumpSound) {
+          jumpSound.play();
+        }
+
+        // Stop running sound when jumping
+        if (isRunning && runningSound && runningSound.isPlaying) {
+          runningSound.stop();
+          isRunning = false;
+        }
+
         // You could add a jumping sprite here if you have one
         // player.setTexture("player_jump");
+      }
+
+      // Stop running sound if player is in the air
+      if (
+        !player.body.blocked.down &&
+        isRunning &&
+        runningSound &&
+        runningSound.isPlaying
+      ) {
+        runningSound.stop();
+        isRunning = false;
       }
 
       // Check if player fell off the world
@@ -514,6 +684,9 @@ const PhaserGame = ({
 
     // Cleanup function
     return () => {
+      // Stop background music when component unmounts
+      stopBackgroundMusic();
+
       if (gameInstanceRef.current) {
         gameInstanceRef.current.destroy(true);
         gameInstanceRef.current = null;
