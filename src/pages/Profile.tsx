@@ -273,14 +273,6 @@ const Profile = () => {
                         Total Attempts
                       </span>
                     </div>
-                    <div className="flex flex-col items-center p-3 bg-space-deep-purple/20 rounded-lg">
-                      <BookOpen className="h-5 w-5 text-space-nebula mb-1" />
-                      <span className="text-sm text-gray-300">
-                        {Math.floor(stats.time_spent / 60)}h{" "}
-                        {stats.time_spent % 60}m
-                      </span>
-                      <span className="text-xs text-gray-500">Time Spent</span>
-                    </div>
                   </div>
                 </div>
               </div>
@@ -602,7 +594,7 @@ const Profile = () => {
 
                   <Card className="cosmic-card p-6">
                     <h3 className="text-xl font-bold mb-4">Summary</h3>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                       <div className="flex flex-col items-center p-4 bg-space-deep-purple/20 rounded-lg">
                         <div className="text-2xl font-bold text-space-nebula mb-1">
                           {stats.total_completed_levels}
@@ -632,15 +624,6 @@ const Profile = () => {
                         </div>
                         <span className="text-sm text-center text-gray-400">
                           Success Rate
-                        </span>
-                      </div>
-                      <div className="flex flex-col items-center p-4 bg-space-deep-purple/20 rounded-lg">
-                        <div className="text-2xl font-bold text-green-500 mb-1">
-                          {Math.floor(stats.time_spent / 60)}h{" "}
-                          {stats.time_spent % 60}m
-                        </div>
-                        <span className="text-sm text-center text-gray-400">
-                          Time Invested
                         </span>
                       </div>
                     </div>

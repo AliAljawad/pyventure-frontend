@@ -1,213 +1,153 @@
-
-import { useState } from "react";
-import { Trophy, Medal, ChevronDown, ChevronUp, RefreshCw, Info } from "lucide-react";
+import { useState, useEffect } from "react";
+import {
+  Trophy,
+  Medal,
+  ChevronDown,
+  ChevronUp,
+  RefreshCw,
+  Info,
+} from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import axios from "axios";
 
-// Dummy data for the leaderboard
-const leaderboardData = [
-  { 
-    id: 1, 
-    username: "CodeNinja", 
-    score: 9850, 
-    progress: 95,
-    avatar: "CN", 
-    achievements: ["Python Master", "Algorithm Ace", "Bug Hunter"],
-    level: 42,
-    streak: 87
-  },
-  { 
-    id: 2, 
-    username: "QuantumCoder", 
-    score: 9340, 
-    progress: 92,
-    avatar: "QC", 
-    achievements: ["Data Scientist", "Web Developer", "AI Specialist"],
-    level: 39,
-    streak: 63
-  },
-  { 
-    id: 3, 
-    username: "ByteWizard", 
-    score: 8970, 
-    progress: 88,
-    avatar: "BW", 
-    achievements: ["Database Expert", "Frontend Wizard", "Code Optimiser"],
-    level: 36,
-    streak: 45
-  },
-  { 
-    id: 4, 
-    username: "SyntaxSage", 
-    score: 8450, 
-    progress: 85,
-    avatar: "SS", 
-    achievements: ["Clean Coder", "Fast Debugger"],
-    level: 34,
-    streak: 28
-  },
-  { 
-    id: 5, 
-    username: "PyExplorer", 
-    score: 7890, 
-    progress: 79,
-    avatar: "PE", 
-    achievements: ["Early Adopter", "Community Helper"],
-    level: 31,
-    streak: 14
-  },
-  { 
-    id: 6, 
-    username: "AlgorithmAce", 
-    score: 7560, 
-    progress: 75,
-    avatar: "AA", 
-    achievements: ["Problem Solver"],
-    level: 30,
-    streak: 21
-  },
-  { 
-    id: 7, 
-    username: "CodeCrusader", 
-    score: 7230, 
-    progress: 70,
-    avatar: "CC", 
-    achievements: ["Consistent Learner"],
-    level: 28,
-    streak: 42
-  },
-  { 
-    id: 8, 
-    username: "PythonPioneer", 
-    score: 6910, 
-    progress: 68,
-    avatar: "PP", 
-    achievements: ["Fast Learner"],
-    level: 27,
-    streak: 19
-  },
-  { 
-    id: 9, 
-    username: "DevDynamo", 
-    score: 6540, 
-    progress: 65,
-    avatar: "DD", 
-    achievements: ["Code Reviewer"],
-    level: 26,
-    streak: 7
-  },
-  { 
-    id: 10, 
-    username: "ScriptSorcerer", 
-    score: 6230, 
-    progress: 62,
-    avatar: "SS", 
-    achievements: ["Newcomer"],
-    level: 25,
-    streak: 5
-  },
-];
+type SortField = "score" | "levels" | "attempts";
 
-type TimeFrame = "allTime" | "weekly" | "daily";
+interface LeaderboardEntry {
+  rank: number;
+  user: {
+    id: number;
+    name: string;
+    username: string;
+    rank: string;
+  };
+  stats: {
+    total_score: number;
+    total_completed_levels: number;
+    total_attempts: number;
+  };
+  progress?: number;
+}
 
 const LeaderboardTable = () => {
-  const [timeFrame, setTimeFrame] = useState<TimeFrame>("allTime");
-  const [sortField, setSortField] = useState<"score" | "streak" | "level">("score");
+  const [sortField, setSortField] = useState<SortField>("score");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [isLoading, setIsLoading] = useState(false);
-  
-  // Sort function
-  const sortedData = [...leaderboardData].sort((a, b) => {
-    if (sortDirection === "asc") {
-      return a[sortField] - b[sortField];
-    } else {
-      return b[sortField] - a[sortField];
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+
+  const fetchLeaderboard = async () => {
+    try {
+      setIsLoading(true);
+      const response = await axios.get(`http://127.0.0.1:8000/api/leaderboard`, {
+        params: {
+          limit: 50,
+        },
+      });
+
+      // Calculate progress based on the highest score
+      const maxScore = Math.max(
+        ...response.data.map((entry: LeaderboardEntry) => entry.stats.total_score)
+      );
+      
+      const leaderboardWithProgress = response.data.map((entry: LeaderboardEntry) => ({
+        ...entry,
+        progress: maxScore > 0 ? Math.round((entry.stats.total_score / maxScore) * 100) : 0,
+      }));
+
+      setLeaderboard(leaderboardWithProgress);
+    } catch (error) {
+      console.error("Error fetching leaderboard:", error);
+      toast.error("Failed to fetch leaderboard data");
+    } finally {
+      setIsLoading(false);
     }
-  });
-  
-  const handleSort = (field: "score" | "streak" | "level") => {
+  };
+
+  useEffect(() => {
+    fetchLeaderboard();
+  }, []);
+
+  const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
     } else {
       setSortField(field);
       setSortDirection("desc");
     }
+
+    // Sort the leaderboard based on the selected field
+    const sortedLeaderboard = [...leaderboard].sort((a, b) => {
+      let aValue, bValue;
+      
+      switch (field) {
+        case "score":
+          aValue = a.stats.total_score;
+          bValue = b.stats.total_score;
+          break;
+        case "levels":
+          aValue = a.stats.total_completed_levels;
+          bValue = b.stats.total_completed_levels;
+          break;
+        case "attempts":
+          aValue = a.stats.total_attempts;
+          bValue = b.stats.total_attempts;
+          break;
+        default:
+          aValue = a.stats.total_score;
+          bValue = b.stats.total_score;
+      }
+
+      if (sortDirection === "asc") {
+        return aValue - bValue;
+      } else {
+        return bValue - aValue;
+      }
+    });
+
+    setLeaderboard(sortedLeaderboard);
   };
-  
+
   const handleRefresh = () => {
-    setIsLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false);
-      toast.success("Leaderboard refreshed!");
-    }, 1000);
+    fetchLeaderboard();
   };
-  
+
   return (
     <div className="w-full">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
-          <h3 className="text-2xl font-bold text-white mb-2">Global Rankings</h3>
-          <p className="text-gray-400">See how you compare to Pythoneers across the galaxy</p>
+          <h3 className="text-2xl font-bold text-white mb-2">
+            Global Rankings
+          </h3>
+          <p className="text-gray-400">
+            See how you compare to Pythoneers across the galaxy
+          </p>
         </div>
-        
+
         <div className="flex flex-col sm:flex-row gap-4">
-          <div className="flex rounded-lg overflow-hidden border border-space-nebula/20">
-            <Button 
-              onClick={() => setTimeFrame("allTime")} 
-              variant="ghost" 
-              className={cn(
-                "rounded-none",
-                timeFrame === "allTime" 
-                  ? "bg-space-nebula text-white" 
-                  : "text-gray-400 hover:text-white"
-              )}
-            >
-              All Time
-            </Button>
-            <Button 
-              onClick={() => setTimeFrame("weekly")} 
-              variant="ghost"
-              className={cn(
-                "rounded-none",
-                timeFrame === "weekly" 
-                  ? "bg-space-nebula text-white" 
-                  : "text-gray-400 hover:text-white"
-              )}
-            >
-              Weekly
-            </Button>
-            <Button 
-              onClick={() => setTimeFrame("daily")} 
-              variant="ghost"
-              className={cn(
-                "rounded-none",
-                timeFrame === "daily" 
-                  ? "bg-space-nebula text-white" 
-                  : "text-gray-400 hover:text-white"
-              )}
-            >
-              Daily
-            </Button>
-          </div>
-          
-          <Button 
-            onClick={handleRefresh} 
-            variant="outline" 
+          <Button
+            onClick={handleRefresh}
+            variant="outline"
             className="border-space-neon-cyan text-space-neon-cyan hover:bg-space-neon-cyan/10"
             disabled={isLoading}
           >
-            <RefreshCw className={cn("h-4 w-4 mr-2", isLoading && "animate-spin")} />
+            <RefreshCw
+              className={cn("h-4 w-4 mr-2", isLoading && "animate-spin")}
+            />
             Refresh
           </Button>
         </div>
       </div>
-      
+
       <Card className="overflow-hidden cosmic-card">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -219,27 +159,48 @@ const LeaderboardTable = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                   User
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer" onClick={() => handleSort("score")}>
+                <th
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer"
+                  onClick={() => handleSort("score")}
+                >
                   <div className="flex items-center">
                     Score
                     {sortField === "score" ? (
-                      sortDirection === "desc" ? <ChevronDown className="h-4 w-4 ml-1" /> : <ChevronUp className="h-4 w-4 ml-1" />
+                      sortDirection === "desc" ? (
+                        <ChevronDown className="h-4 w-4 ml-1" />
+                      ) : (
+                        <ChevronUp className="h-4 w-4 ml-1" />
+                      )
                     ) : null}
                   </div>
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer" onClick={() => handleSort("level")}>
+                <th
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer"
+                  onClick={() => handleSort("levels")}
+                >
                   <div className="flex items-center">
-                    Level
-                    {sortField === "level" ? (
-                      sortDirection === "desc" ? <ChevronDown className="h-4 w-4 ml-1" /> : <ChevronUp className="h-4 w-4 ml-1" />
+                    Levels
+                    {sortField === "levels" ? (
+                      sortDirection === "desc" ? (
+                        <ChevronDown className="h-4 w-4 ml-1" />
+                      ) : (
+                        <ChevronUp className="h-4 w-4 ml-1" />
+                      )
                     ) : null}
                   </div>
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer" onClick={() => handleSort("streak")}>
+                <th
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer"
+                  onClick={() => handleSort("attempts")}
+                >
                   <div className="flex items-center">
-                    Streak
-                    {sortField === "streak" ? (
-                      sortDirection === "desc" ? <ChevronDown className="h-4 w-4 ml-1" /> : <ChevronUp className="h-4 w-4 ml-1" />
+                    Attempts
+                    {sortField === "attempts" ? (
+                      sortDirection === "desc" ? (
+                        <ChevronDown className="h-4 w-4 ml-1" />
+                      ) : (
+                        <ChevronUp className="h-4 w-4 ml-1" />
+                      )
                     ) : null}
                   </div>
                 </th>
@@ -249,33 +210,38 @@ const LeaderboardTable = () => {
               </tr>
             </thead>
             <tbody>
-              {sortedData.map((user, index) => (
-                <tr 
-                  key={user.id} 
+              {leaderboard.map((entry, index) => (
+                <tr
+                  key={entry.user.id}
                   className={cn(
-                    "hover:bg-space-nebula/10 transition-colors", 
+                    "hover:bg-space-nebula/10 transition-colors",
                     index % 2 === 0 ? "bg-space-deep-purple/10" : ""
                   )}
                 >
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      {index === 0 && (
+                      {entry.rank === 1 && (
                         <Trophy className="h-5 w-5 text-yellow-400 mr-2" />
                       )}
-                      {index === 1 && (
+                      {entry.rank === 2 && (
                         <Medal className="h-5 w-5 text-gray-300 mr-2" />
                       )}
-                      {index === 2 && (
+                      {entry.rank === 3 && (
                         <Medal className="h-5 w-5 text-amber-700 mr-2" />
                       )}
-                      <span className={cn(
-                        "font-medium",
-                        index === 0 ? "text-yellow-400" : 
-                        index === 1 ? "text-gray-300" : 
-                        index === 2 ? "text-amber-700" : 
-                        "text-white"
-                      )}>
-                        {index + 1}
+                      <span
+                        className={cn(
+                          "font-medium",
+                          entry.rank === 1
+                            ? "text-yellow-400"
+                            : entry.rank === 2
+                            ? "text-gray-300"
+                            : entry.rank === 3
+                            ? "text-amber-700"
+                            : "text-white"
+                        )}
+                      >
+                        {entry.rank}
                       </span>
                     </div>
                   </td>
@@ -287,18 +253,24 @@ const LeaderboardTable = () => {
                             <div className="relative">
                               <Avatar className="h-8 w-8 mr-3 border border-space-nebula/30">
                                 <AvatarFallback className="bg-space-deep-purple text-white">
-                                  {user.avatar}
+                                  {entry.user.username.slice(0, 2).toUpperCase()}
                                 </AvatarFallback>
-                                <AvatarImage src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${user.username}`} />
+                                <AvatarImage
+                                  src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${entry.user.username}`}
+                                />
                               </Avatar>
-                              {index < 3 && (
-                                <div className={cn(
-                                  "absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[10px]",
-                                  index === 0 ? "bg-yellow-400" : 
-                                  index === 1 ? "bg-gray-300" : 
-                                  "bg-amber-700"
-                                )}>
-                                  {index + 1}
+                              {entry.rank <= 3 && (
+                                <div
+                                  className={cn(
+                                    "absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[10px]",
+                                    entry.rank === 1
+                                      ? "bg-yellow-400"
+                                      : entry.rank === 2
+                                      ? "bg-gray-300"
+                                      : "bg-amber-700"
+                                  )}
+                                >
+                                  {entry.rank}
                                 </div>
                               )}
                             </div>
@@ -306,56 +278,68 @@ const LeaderboardTable = () => {
                           <TooltipContent className="p-4 max-w-xs space-y-2">
                             <div className="flex items-center">
                               <Avatar className="h-10 w-10 mr-3">
-                                <AvatarFallback>{user.avatar}</AvatarFallback>
-                                <AvatarImage src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${user.username}`} />
+                                <AvatarFallback>
+                                  {entry.user.username.slice(0, 2).toUpperCase()}
+                                </AvatarFallback>
+                                <AvatarImage
+                                  src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${entry.user.username}`}
+                                />
                               </Avatar>
                               <div>
-                                <p className="font-bold">{user.username}</p>
-                                <p className="text-xs text-gray-400">Level {user.level} • {user.streak} day streak</p>
-                              </div>
-                            </div>
-                            <div className="mt-2">
-                              <p className="text-xs font-medium mb-1">Achievements:</p>
-                              <div className="flex flex-wrap gap-1">
-                                {user.achievements.map((achievement) => (
-                                  <Badge key={achievement} variant="secondary" className="text-[10px]">
-                                    {achievement}
-                                  </Badge>
-                                ))}
+                                <p className="font-bold">{entry.user.name}</p>
+                                <p className="text-xs text-gray-400">
+                                  @{entry.user.username}
+                                </p>
+                                <p className="text-xs text-gray-400">
+                                  {entry.user.rank}
+                                </p>
                               </div>
                             </div>
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
-                      <span className="font-medium text-white">{user.username}</span>
+                      <div>
+                        <span className="font-medium text-white">
+                          {entry.user.name}
+                        </span>
+                        <p className="text-xs text-gray-400">
+                          @{entry.user.username}
+                        </p>
+                      </div>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-white">{user.score.toLocaleString()}</span>
+                    <span className="text-white">
+                      {entry.stats.total_score.toLocaleString()}
+                    </span>
                     <span className="text-space-nebula text-xs ml-1">pts</span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <div className="w-8 h-8 rounded-full bg-space-deep-purple flex items-center justify-center text-sm mr-2">
-                        {user.level}
+                        {entry.stats.total_completed_levels}
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      <span className="text-white mr-1">{user.streak}</span>
-                      <span className="text-space-neon-pink">days</span>
+                      <span className="text-white mr-1">
+                        {entry.stats.total_attempts}
+                      </span>
+                      <span className="text-space-neon-pink">attempts</span>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <div className="w-full bg-space-deep-purple/30 rounded-full h-2.5 mr-2 max-w-[100px]">
-                        <div 
-                          className="bg-gradient-to-r from-space-nebula to-space-neon-cyan h-2.5 rounded-full" 
-                          style={{ width: `${user.progress}%` }}
+                        <div
+                          className="bg-gradient-to-r from-space-nebula to-space-neon-cyan h-2.5 rounded-full"
+                          style={{ width: `${entry.progress || 0}%` }}
                         ></div>
                       </div>
-                      <span className="text-white text-xs">{user.progress}%</span>
+                      <span className="text-white text-xs">
+                        {entry.progress || 0}%
+                      </span>
                     </div>
                   </td>
                 </tr>
@@ -364,15 +348,12 @@ const LeaderboardTable = () => {
           </table>
         </div>
       </Card>
-      
+
       <div className="flex justify-between items-center mt-6">
         <p className="text-sm text-gray-400 flex items-center">
           <Info className="h-4 w-4 mr-1" />
-          Rankings update every 24 hours
+          Rankings update in real-time
         </p>
-        <Button variant="link" className="text-space-nebula">
-          View Full Rankings
-        </Button>
       </div>
     </div>
   );
