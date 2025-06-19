@@ -1,155 +1,121 @@
-import { useState } from "react";
-import { ChevronRight, Lock, Check, Star } from "lucide-react";
+import { useState, useEffect } from "react";
+import { ChevronRight, Lock, Check, Loader2 } from "lucide-react";
 
 export interface Level {
   id: number;
   title: string;
   description: string;
-  difficulty: string;
-  theme: string;
-  isUnlocked: boolean;
-  isCompleted: boolean;
-  stars: number;
+  difficulty: "easy" | "medium" | "hard";
+  category: string;
+  topic: string;
+  is_unlocked: boolean;
+  is_completed: boolean;
 }
 
 export interface LevelSelectProps {
-  levels: Level[];
   onSelectLevel: (levelId: number) => void;
+  apiBaseUrl?: string;
+  authToken?: string; // Pass auth token as prop instead of using localStorage
 }
 
-const LevelSelect = ({ onSelectLevel }: LevelSelectProps) => {
-  // In a real app, this would come from a database or local storage
-  const [levels, setLevels] = useState<Level[]>([
-    {
-      id: 1,
-      title: "Syntax Galaxy",
-      description:
-        "Learn the basics of Python syntax while exploring the galaxy",
-      difficulty: "beginner",
-      theme: "space",
-      isUnlocked: true,
-      isCompleted: false,
-      stars: 0,
-    },
-    {
-      id: 2,
-      title: "Variable Nebula",
-      description: "Master variables and data types in the colorful nebula",
-      difficulty: "beginner",
-      theme: "nebula",
-      isUnlocked: true,
-      isCompleted: false,
-      stars: 0,
-    },
-    {
-      id: 3,
-      title: "Conditional Cosmos",
-      description: "Navigate through if statements and logical operators",
-      difficulty: "beginner",
-      theme: "cosmos",
-      isUnlocked: true,
-      isCompleted: false,
-      stars: 0,
-    },
-    {
-      id: 4,
-      title: "Loop Lunar Base",
-      description: "Master loops and iterations on the lunar surface",
-      difficulty: "intermediate",
-      theme: "moon",
-      isUnlocked: true,
-      isCompleted: false,
-      stars: 0,
-    },
-    {
-      id: 5,
-      title: "Function Frontier",
-      description: "Create and use functions to solve complex problems",
-      difficulty: "intermediate",
-      theme: "frontier",
-      isUnlocked: false,
-      isCompleted: false,
-      stars: 0,
-    },
-    {
-      id: 6,
-      title: "List Labyrinth",
-      description: "Navigate the maze of lists and their methods",
-      difficulty: "intermediate",
-      theme: "labyrinth",
-      isUnlocked: false,
-      isCompleted: false,
-      stars: 0,
-    },
-    {
-      id: 7,
-      title: "Dictionary Dimension",
-      description: "Explore dictionaries in a multi-dimensional space",
-      difficulty: "intermediate",
-      theme: "dimension",
-      isUnlocked: false,
-      isCompleted: false,
-      stars: 0,
-    },
-    {
-      id: 8,
-      title: "Class Constellation",
-      description: "Build classes and objects in the star constellation",
-      difficulty: "advanced",
-      theme: "constellation",
-      isUnlocked: false,
-      isCompleted: false,
-      stars: 0,
-    },
-    {
-      id: 9,
-      title: "Exception Eclipse",
-      description: "Handle exceptions during the cosmic eclipse",
-      difficulty: "advanced",
-      theme: "eclipse",
-      isUnlocked: false,
-      isCompleted: false,
-      stars: 0,
-    },
-    {
-      id: 10,
-      title: "Module Mothership",
-      description: "Import and use modules in the ultimate mothership",
-      difficulty: "advanced",
-      theme: "mothership",
-      isUnlocked: false,
-      isCompleted: false,
-      stars: 0,
-    },
-  ]);
+const LevelSelect = ({
+  onSelectLevel,
+  apiBaseUrl = "http://127.0.0.1:8000/api",
+  authToken,
+}: LevelSelectProps) => {
+  const [levels, setLevels] = useState<Level[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch levels from API
+  useEffect(() => {
+    const fetchLevels = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
+
+        // Add authorization header if token is provided
+        if (authToken) {
+          headers["Authorization"] = `Bearer ${authToken}`;
+        }
+
+        const response = await fetch(`${apiBaseUrl}/levels`, {
+          method: "GET",
+          headers,
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        if (result.success) {
+          setLevels(result.data);
+        } else {
+          throw new Error(result.message || "Failed to fetch levels");
+        }
+      } catch (err) {
+        console.error("Error fetching levels:", err);
+        setError(err instanceof Error ? err.message : "Failed to fetch levels");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchLevels();
+  }, [apiBaseUrl, authToken]);
 
   // Function to get difficulty color
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
-      case "beginner":
+      case "easy":
         return "text-green-400";
-      case "intermediate":
+      case "medium":
         return "text-yellow-400";
-      case "advanced":
+      case "hard":
         return "text-red-400";
       default:
         return "text-blue-400";
     }
   };
 
-  // Function to render stars
-  const renderStars = (count: number) => {
-    return Array(3)
-      .fill(0)
-      .map((_, i) => (
-        <Star
-          key={i}
-          className={`w-4 h-4 ${
-            i < count ? "text-yellow-400 fill-yellow-400" : "text-gray-600"
-          }`}
-        />
-      ));
-  };
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="py-8 flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 text-space-nebula animate-spin mx-auto mb-4" />
+          <p className="text-gray-300">Loading levels...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="py-8">
+        <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-6 mb-6">
+          <h3 className="text-red-400 font-medium mb-2">
+            Error Loading Levels
+          </h3>
+          <p className="text-red-300 text-sm">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-4 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="py-8">
@@ -160,11 +126,11 @@ const LevelSelect = ({ onSelectLevel }: LevelSelectProps) => {
           <div
             key={level.id}
             className={`cosmic-card relative overflow-hidden transition-all duration-300 ${
-              level.isUnlocked
+              level.is_unlocked
                 ? "cursor-pointer hover:scale-105 hover:shadow-glow"
                 : "opacity-70 grayscale cursor-not-allowed"
             }`}
-            onClick={() => level.isUnlocked && onSelectLevel(level.id)}
+            onClick={() => level.is_unlocked && onSelectLevel(level.id)}
           >
             {/* Path connector lines (visually connect levels) */}
             {level.id < levels.length && (
@@ -179,11 +145,11 @@ const LevelSelect = ({ onSelectLevel }: LevelSelectProps) => {
                   Level {level.id}
                 </span>
 
-                {level.isCompleted ? (
+                {level.is_completed ? (
                   <span className="bg-green-600/30 text-green-400 px-2 py-1 rounded-full text-xs flex items-center">
                     <Check className="w-3 h-3 mr-1" /> Completed
                   </span>
-                ) : level.isUnlocked ? (
+                ) : level.is_unlocked ? (
                   <span className="bg-blue-600/30 text-blue-400 px-2 py-1 rounded-full text-xs">
                     Unlocked
                   </span>
@@ -194,10 +160,17 @@ const LevelSelect = ({ onSelectLevel }: LevelSelectProps) => {
                 )}
               </div>
 
-              {/* Level title and theme */}
+              {/* Level title and topic */}
               <h3 className="text-xl font-bold text-white mb-2 group-hover:text-glow">
                 {level.title}
               </h3>
+
+              {/* Topic badge */}
+              <div className="mb-2">
+                <span className="bg-space-nebula/30 text-space-nebula px-2 py-1 rounded-full text-xs">
+                  {level.topic?.charAt(0).toUpperCase() + level.topic?.slice(1)}
+                </span>
+              </div>
 
               {/* Difficulty */}
               <p
@@ -215,16 +188,14 @@ const LevelSelect = ({ onSelectLevel }: LevelSelectProps) => {
 
               {/* Bottom section with stars and button */}
               <div className="flex justify-between items-center mt-2">
-                <div className="flex">{renderStars(level.stars)}</div>
-
                 <button
                   className={`flex items-center text-sm px-3 py-1 rounded-full 
                     ${
-                      level.isUnlocked
+                      level.is_unlocked
                         ? "bg-space-nebula/30 text-space-nebula hover:bg-space-nebula/50"
                         : "bg-gray-800/50 text-gray-500"
                     }`}
-                  disabled={!level.isUnlocked}
+                  disabled={!level.is_unlocked}
                 >
                   Play <ChevronRight className="w-4 h-4 ml-1" />
                 </button>
@@ -232,7 +203,7 @@ const LevelSelect = ({ onSelectLevel }: LevelSelectProps) => {
             </div>
 
             {/* Lock overlay for locked levels */}
-            {!level.isUnlocked && (
+            {!level.is_unlocked && (
               <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                 <Lock className="w-12 h-12 text-gray-400 opacity-80" />
               </div>

@@ -1,16 +1,75 @@
-import React from "react";
-import { ArrowLeft, Info } from "lucide-react";
+import { useState, useEffect } from "react";
+import { ArrowLeft, Check, Info, Loader2 } from "lucide-react";
 import { Level } from "./LevelSelect";
 
 interface LevelInfoProps {
-  level: Level;
+  levelId: number;
   onBack: () => void;
   onStartLevel: () => void;
+  apiBaseUrl?: string;
+  authToken?: string; // Pass auth token as prop instead of using localStorage
 }
 
-const LevelInfo = ({ level, onBack, onStartLevel }: LevelInfoProps) => {
-  // Background gradients based on level theme
-  const getThemeBackground = (theme: string) => {
+const LevelInfo = ({
+  levelId,
+  onBack,
+  onStartLevel,
+  apiBaseUrl = "http://127.0.0.1:8000/api",
+  authToken,
+}: LevelInfoProps) => {
+  const [level, setLevel] = useState<Level | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch individual level data from API
+  useEffect(() => {
+    const fetchLevel = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
+
+        // Add authorization header if token is provided
+        if (authToken) {
+          headers["Authorization"] = `Bearer ${authToken}`;
+        }
+
+        const response = await fetch(`${apiBaseUrl}/levels/${levelId}`, {
+          method: "GET",
+          headers,
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        if (result.success) {
+          setLevel(result.data);
+        } else {
+          throw new Error(result.message || "Failed to fetch level details");
+        }
+      } catch (err) {
+        console.error("Error fetching level:", err);
+        setError(
+          err instanceof Error ? err.message : "Failed to fetch level details"
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (levelId) {
+      fetchLevel();
+    }
+  }, [levelId, apiBaseUrl, authToken]);
+
+  // Background gradients based on level category
+  const getThemeBackground = (category: string) => {
     const themes = {
       space: "from-indigo-900 to-purple-900",
       nebula: "from-purple-900 to-pink-800",
@@ -25,28 +84,28 @@ const LevelInfo = ({ level, onBack, onStartLevel }: LevelInfoProps) => {
     };
 
     return (
-      themes[theme as keyof typeof themes] || "from-blue-900 to-purple-900"
+      themes[category as keyof typeof themes] || "from-blue-900 to-purple-900"
     );
   };
 
   // Difficulty information
   const getDifficultyInfo = (difficulty: string) => {
     switch (difficulty) {
-      case "beginner":
+      case "easy":
         return {
           color: "text-green-400",
           bgColor: "bg-green-400/20",
           description:
             "Perfect for those just starting with Python. Learn the fundamentals at a gentle pace.",
         };
-      case "intermediate":
+      case "medium":
         return {
           color: "text-yellow-400",
           bgColor: "bg-yellow-400/20",
           description:
             "For coders with some Python experience. Introduces more complex concepts and challenges.",
         };
-      case "advanced":
+      case "hard":
         return {
           color: "text-red-400",
           bgColor: "bg-red-400/20",
@@ -61,6 +120,64 @@ const LevelInfo = ({ level, onBack, onStartLevel }: LevelInfoProps) => {
         };
     }
   };
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="w-full">
+        <div className="flex items-center mb-6">
+          <button
+            onClick={onBack}
+            className="flex items-center text-gray-300 hover:text-white transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5 mr-2" />
+            Back to Levels
+          </button>
+        </div>
+
+        <div className="cosmic-card p-8">
+          <div className="flex items-center justify-center min-h-[400px]">
+            <div className="text-center">
+              <Loader2 className="w-12 h-12 text-space-nebula animate-spin mx-auto mb-4" />
+              <p className="text-gray-300">Loading level details...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error || !level) {
+    return (
+      <div className="w-full">
+        <div className="flex items-center mb-6">
+          <button
+            onClick={onBack}
+            className="flex items-center text-gray-300 hover:text-white transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5 mr-2" />
+            Back to Levels
+          </button>
+        </div>
+
+        <div className="cosmic-card p-6">
+          <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-6">
+            <h3 className="text-red-400 font-medium mb-2">
+              Error Loading Level
+            </h3>
+            <p className="text-red-300 text-sm">{error || "Level not found"}</p>
+            <button
+              onClick={onBack}
+              className="mt-4 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+            >
+              Go Back
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const difficultyInfo = getDifficultyInfo(level.difficulty);
 
@@ -79,10 +196,10 @@ const LevelInfo = ({ level, onBack, onStartLevel }: LevelInfoProps) => {
 
       {/* Level card with detailed info */}
       <div className={`cosmic-card overflow-hidden`}>
-        {/* Banner image - simulated with gradient based on theme */}
+        {/* Banner image - simulated with gradient based on category */}
         <div
           className={`h-32 bg-gradient-to-r ${getThemeBackground(
-            level.theme
+            level.category
           )} relative`}
         >
           <div className="absolute inset-0 bg-black/30"></div>
@@ -95,13 +212,18 @@ const LevelInfo = ({ level, onBack, onStartLevel }: LevelInfoProps) => {
 
         {/* Level information */}
         <div className="p-6">
-          {/* Difficulty badge */}
-          <div
-            className={`inline-block ${difficultyInfo.bgColor} ${difficultyInfo.color} px-3 py-1 rounded-full text-sm font-medium mb-4`}
-          >
-            {level.difficulty.charAt(0).toUpperCase() +
-              level.difficulty.slice(1)}{" "}
-            Difficulty
+          {/* Topic and Difficulty badges */}
+          <div className="flex gap-2 mb-4">
+            <span className="bg-space-nebula/30 text-space-nebula px-3 py-1 rounded-full text-sm">
+              {level.topic?.charAt(0).toUpperCase() + level.topic?.slice(1)}
+            </span>
+            <span
+              className={`${difficultyInfo.bgColor} ${difficultyInfo.color} px-3 py-1 rounded-full text-sm font-medium`}
+            >
+              {level.difficulty.charAt(0).toUpperCase() +
+                level.difficulty.slice(1)}{" "}
+              Difficulty
+            </span>
           </div>
 
           {/* Main description */}
@@ -126,7 +248,7 @@ const LevelInfo = ({ level, onBack, onStartLevel }: LevelInfoProps) => {
             <ul className="space-y-2 text-gray-300">
               <li className="flex items-center">
                 <span className="w-2 h-2 bg-space-nebula rounded-full mr-2"></span>
-                Core Python concepts related to {level.title.toLowerCase()}
+                Core Python concepts related to {level.topic}
               </li>
               <li className="flex items-center">
                 <span className="w-2 h-2 bg-space-nebula rounded-full mr-2"></span>
@@ -134,17 +256,30 @@ const LevelInfo = ({ level, onBack, onStartLevel }: LevelInfoProps) => {
               </li>
               <li className="flex items-center">
                 <span className="w-2 h-2 bg-space-nebula rounded-full mr-2"></span>
-                Practical coding applications in a game environment
+                Practical coding applications in a {level.category} environment
               </li>
             </ul>
           </div>
 
+          {/* Level status */}
+            {level.is_completed ? (
+            <div className="mb-4 flex items-center text-green-400">
+              <Check className="w-5 h-5 mr-2" />
+              <span>You've completed this level!</span>
+            </div>
+            ) : null}
+
           {/* Start button */}
           <button
             onClick={onStartLevel}
-            className="w-full py-3 px-6 bg-space-nebula text-white font-medium rounded-md hover:bg-space-nebula/80 transition-colors focus:outline-none focus:ring-2 focus:ring-space-nebula focus:ring-opacity-50"
+            disabled={!level.is_unlocked}
+            className={`w-full py-3 px-6 font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-opacity-50 ${
+              level.is_unlocked
+                ? "bg-space-nebula text-white hover:bg-space-nebula/80 focus:ring-space-nebula"
+                : "bg-gray-600 text-gray-400 cursor-not-allowed"
+            }`}
           >
-            Start Level
+            {level.is_completed ? "Play Again" : "Start Level"}
           </button>
         </div>
       </div>
