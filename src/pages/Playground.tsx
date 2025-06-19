@@ -26,7 +26,8 @@ const Playground = () => {
   // Game state
   const [gameState, setGameState] = useState<GameState>("level-select");
   const [showCodeEditor, setShowCodeEditor] = useState(false);
-  const [selectedLevel, setSelectedLevel] = useState<number>(1);
+  const [selectedLevel, setSelectedLevel] = useState<Level | null>(null);
+
   const getAuthToken = (): string | null => {
     try {
       const token = localStorage.getItem("token");
@@ -35,17 +36,17 @@ const Playground = () => {
       console.error("Error getting auth token:", error);
       return null;
     }
-  };  
+  };
+
   // Initialize auth token immediately with the value, not null first
   const [authToken, setAuthToken] = useState<string | null>(() => {
     // Initialize with the actual token value on first render
     return getAuthToken();
   });
 
-
   // Handle level selection
-  const handleSelectLevel = (levelId: number) => {
-    setSelectedLevel(levelId);
+  const handleSelectLevel = (level: Level) => {
+    setSelectedLevel(level);
     setGameState("level-info");
   };
 
@@ -57,6 +58,7 @@ const Playground = () => {
   // Handle back to level selection
   const handleBackToLevels = () => {
     setGameState("level-select");
+    setSelectedLevel(null); // Reset selected level
     setShowCodeEditor(false);
   };
 
@@ -89,6 +91,7 @@ const Playground = () => {
         setShowCodeEditor(false);
         setTimeout(() => {
           setGameState("level-select");
+          setSelectedLevel(null); // Reset selected level
         }, 500);
       }, 2000);
     } catch (error) {
@@ -104,13 +107,14 @@ const Playground = () => {
     setShowCodeEditor(false);
     setTimeout(() => {
       setGameState("level-select");
+      setSelectedLevel(null); // Reset selected level
     }, 500);
   };
 
-  // Get selected level data for display
+  // Get selected level data for display - with null check
   const getSelectedLevelTitle = () => {
-    // This will be fetched by LevelInfo component, so we just show the level number
-    return `Level ${selectedLevel}`;
+    if (!selectedLevel) return "Level";
+    return `Level ${selectedLevel.id}: ${selectedLevel.title}`;
   };
 
   return (
@@ -138,17 +142,15 @@ const Playground = () => {
             </div>
           )}
 
-          {gameState === "level-info" && (
+          {gameState === "level-info" && selectedLevel && (
             <LevelInfo
-              levelId={selectedLevel}
+              level={selectedLevel}
               onBack={handleBackToLevels}
               onStartLevel={handleStartLevel}
-              apiBaseUrl="http://127.0.0.1:8000/api"
-              authToken={authToken}
             />
           )}
 
-          {gameState === "playing" && (
+          {gameState === "playing" && selectedLevel && (
             <div>
               <div className="flex justify-between items-center mb-4">
                 <button
@@ -174,27 +176,32 @@ const Playground = () => {
                 <div className="h-[600px] flex items-center justify-center bg-space-deep-purple/30">
                   <PhaserGame
                     onReachCheckpoint={handleReachCheckpoint}
-                    level={selectedLevel}
+                    level={selectedLevel.id}
                   />
                 </div>
               </div>
             </div>
           )}
 
-          {/* Dialog for code editor */}
+          {/* Dialog for code editor - with null checks */}
           <Dialog open={showCodeEditor} onOpenChange={setShowCodeEditor}>
             <DialogContent className="max-w-6xl bg-space-dark-blue border-space-nebula/30">
               <DialogHeader>
                 <DialogTitle className="text-2xl font-bold text-white">
-                  Python Challenge - Level {selectedLevel}
+                  Python Challenge -{" "}
+                  {selectedLevel
+                    ? `Level ${selectedLevel.id}: ${selectedLevel.title}`
+                    : "Level"}
                 </DialogTitle>
               </DialogHeader>
               <div className="py-4">
-                <CodeEditor
-                  levelId={selectedLevel}
-                  onLevelComplete={handleLevelComplete}
-                  onClose={handleCodeEditorClose}
-                />
+                {selectedLevel && (
+                  <CodeEditor
+                    levelId={selectedLevel.id}
+                    onLevelComplete={handleLevelComplete}
+                    onClose={handleCodeEditorClose}
+                  />
+                )}
               </div>
               <div className="flex justify-end space-x-3 mt-2">
                 <button

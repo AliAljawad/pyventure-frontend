@@ -12,8 +12,17 @@ export interface Level {
   is_completed: boolean;
 }
 
+export interface UserProgress {
+  user_id: number;
+  level_id: number;
+  is_completed: boolean;
+  score: number;
+  attempts: number;
+  last_updated: string;
+}
+
 export interface LevelSelectProps {
-  onSelectLevel: (levelId: number) => void;
+  onSelectLevel: (level: Level) => void;
   apiBaseUrl?: string;
   authToken?: string; // Pass auth token as prop instead of using localStorage
 }
@@ -24,12 +33,48 @@ const LevelSelect = ({
   authToken,
 }: LevelSelectProps) => {
   const [levels, setLevels] = useState<Level[]>([]);
+  const [userProgress, setUserProgress] = useState<UserProgress[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch levels from API
+  // Function to process levels based on user progress
+  const processLevelsWithProgress = (
+    fetchedLevels: Level[],
+    progress: UserProgress[]
+  ): Level[] => {
+    // Find the highest completed level
+    const completedLevels = progress
+      .filter((p) => p.is_completed)
+      .map((p) => p.level_id)
+      .sort((a, b) => b - a); // Sort in descending order
+
+    const highestCompletedLevel =
+      completedLevels.length > 0 ? completedLevels[0] : 0;
+
+    // Process each level
+    return fetchedLevels.map((level) => {
+      const userProgressForLevel = progress.find(
+        (p) => p.level_id === level.id
+      );
+
+      // Check if level should be unlocked
+      const shouldBeUnlocked = level.id <= highestCompletedLevel + 1;
+
+      // Check if level should be completed
+      const shouldBeCompleted = level.id <= highestCompletedLevel;
+
+      return {
+        ...level,
+        is_unlocked: shouldBeUnlocked || level.id === 1, // Always unlock level 1
+        is_completed:
+          shouldBeCompleted || userProgressForLevel?.is_completed || false,
+      };
+    });
+  };
+
+  // Fetch levels and user progress from API
   useEffect(() => {
-    const fetchLevels = async () => {
+    const fetchData = async () => {
       try {
         setLoading(true);
         setError(null);
@@ -43,31 +88,62 @@ const LevelSelect = ({
           headers["Authorization"] = `Bearer ${authToken}`;
         }
 
-        const response = await fetch(`${apiBaseUrl}/levels`, {
-          method: "GET",
-          headers,
-        });
+        // Fetch levels and progress simultaneously
+        const [levelsResponse, progressResponse] = await Promise.all([
+          fetch(`${apiBaseUrl}/levels`, {
+            method: "GET",
+            headers,
+          }),
+          // Only fetch progress if user is authenticated
+          authToken
+            ? fetch(`${apiBaseUrl}/profile`, {
+                method: "GET",
+                headers,
+              })
+            : Promise.resolve(null),
+        ]);
 
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+        // Handle levels response
+        if (!levelsResponse.ok) {
+          throw new Error(`HTTP error! status: ${levelsResponse.status}`);
         }
 
-        const result = await response.json();
-
-        if (result.success) {
-          setLevels(result.data);
-        } else {
-          throw new Error(result.message || "Failed to fetch levels");
+        const levelsResult = await levelsResponse.json();
+        if (!levelsResult.success) {
+          throw new Error(levelsResult.message || "Failed to fetch levels");
         }
+
+        const fetchedLevels = levelsResult.data;
+        let userProgressData: UserProgress[] = [];
+
+        // Handle progress response if user is authenticated
+        if (progressResponse && progressResponse.ok) {
+          const progressResult = await progressResponse.json();
+          if (progressResult.progress) {
+            userProgressData = progressResult.progress;
+            setUserProgress(userProgressData);
+          }
+        }
+
+        // Process levels with progress data
+        const processedLevels = authToken
+          ? processLevelsWithProgress(fetchedLevels, userProgressData)
+          : fetchedLevels.map((level: Level, index: number) => ({
+              ...level,
+              is_unlocked: index === 0, // Only unlock first level for non-authenticated users
+              is_completed: false,
+            }));
+
+        setLevels(processedLevels);
       } catch (err) {
-        console.error("Error fetching levels:", err);
-        setError(err instanceof Error ? err.message : "Failed to fetch levels");
+        console.error("Error fetching data:", err);
+        setError(err instanceof Error ? err.message : "Failed to fetch data");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchLevels();
+    fetchData();
   }, [apiBaseUrl, authToken]);
 
   // Function to get difficulty color
@@ -84,6 +160,22 @@ const LevelSelect = ({
     }
   };
 
+  // Get progress statistics
+  const getProgressStats = () => {
+    const totalLevels = levels.length;
+    const completedLevels = levels.filter((level) => level.is_completed).length;
+    const unlockedLevels = levels.filter((level) => level.is_unlocked).length;
+
+    return {
+      total: totalLevels,
+      completed: completedLevels,
+      unlocked: unlockedLevels,
+      completionPercentage:
+        totalLevels > 0 ? Math.round((completedLevels / totalLevels) * 100) : 0,
+    };
+  };
+
+  const progressStats = getProgressStats();
 
   // Loading state
   if (loading) {
@@ -119,7 +211,43 @@ const LevelSelect = ({
 
   return (
     <div className="py-8">
-      <h2 className="text-2xl font-bold text-white mb-6">Select a Level</h2>
+      <div className="mb-8">
+        <h2 className="text-2xl font-bold text-white mb-4">Select a Level</h2>
+
+        {/* Progress Summary - only show if user is authenticated */}
+        {authToken && (
+          <div className="bg-space-deep-purple/20 rounded-lg p-4 mb-6">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex gap-6">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-space-nebula">
+                    {progressStats.completed}
+                  </div>
+                  <div className="text-sm text-gray-400">Completed</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-space-neon-cyan">
+                    {progressStats.unlocked}
+                  </div>
+                  <div className="text-sm text-gray-400">Unlocked</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-white">
+                    {progressStats.total}
+                  </div>
+                  <div className="text-sm text-gray-400">Total</div>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-lg font-bold text-space-meteor-orange">
+                  {progressStats.completionPercentage}%
+                </div>
+                <div className="text-sm text-gray-400">Progress</div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {levels.map((level) => (
@@ -130,7 +258,7 @@ const LevelSelect = ({
                 ? "cursor-pointer hover:scale-105 hover:shadow-glow"
                 : "opacity-70 grayscale cursor-not-allowed"
             }`}
-            onClick={() => level.is_unlocked && onSelectLevel(level.id)}
+            onClick={() => level.is_unlocked && onSelectLevel(level)}
           >
             {/* Path connector lines (visually connect levels) */}
             {level.id < levels.length && (
@@ -186,8 +314,23 @@ const LevelSelect = ({
               {/* Description */}
               <p className="text-gray-300 text-sm mb-4">{level.description}</p>
 
-              {/* Bottom section with stars and button */}
+              {/* Bottom section with progress info and button */}
               <div className="flex justify-between items-center mt-2">
+                {/* Show user's progress for this level if available */}
+                {authToken && userProgress.length > 0 && (
+                  <div className="text-xs text-gray-400">
+                    {(() => {
+                      const progress = userProgress.find(
+                        (p) => p.level_id === level.id
+                      );
+                      if (progress) {
+                        return `Score: ${progress.score} | Attempts: ${progress.attempts}`;
+                      }
+                      return "";
+                    })()}
+                  </div>
+                )}
+
                 <button
                   className={`flex items-center text-sm px-3 py-1 rounded-full 
                     ${
@@ -197,7 +340,8 @@ const LevelSelect = ({
                     }`}
                   disabled={!level.is_unlocked}
                 >
-                  Play <ChevronRight className="w-4 h-4 ml-1" />
+                  {level.is_completed ? "Replay" : "Play"}
+                  <ChevronRight className="w-4 h-4 ml-1" />
                 </button>
               </div>
             </div>

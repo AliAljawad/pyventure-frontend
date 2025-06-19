@@ -3,70 +3,26 @@ import { ArrowLeft, Check, Info, Loader2 } from "lucide-react";
 import { Level } from "./LevelSelect";
 
 interface LevelInfoProps {
-  levelId: number;
+  level: Level;
   onBack: () => void;
   onStartLevel: () => void;
-  apiBaseUrl?: string;
-  authToken?: string; // Pass auth token as prop instead of using localStorage
 }
 
 const LevelInfo = ({
-  levelId,
+  level,
   onBack,
   onStartLevel,
-  apiBaseUrl = "http://127.0.0.1:8000/api",
-  authToken,
 }: LevelInfoProps) => {
-  const [level, setLevel] = useState<Level | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // Fetch individual level data from API
   useEffect(() => {
-    const fetchLevel = async () => {
-      try {
-        setLoading(true);
-        setError(null);
+    // Simulate loading time or actual data fetching
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 500); // Adjust timing as needed
 
-        const headers: Record<string, string> = {
-          "Content-Type": "application/json",
-        };
-
-        // Add authorization header if token is provided
-        if (authToken) {
-          headers["Authorization"] = `Bearer ${authToken}`;
-        }
-
-        const response = await fetch(`${apiBaseUrl}/levels/${levelId}`, {
-          method: "GET",
-          headers,
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const result = await response.json();
-
-        if (result.success) {
-          setLevel(result.data);
-        } else {
-          throw new Error(result.message || "Failed to fetch level details");
-        }
-      } catch (err) {
-        console.error("Error fetching level:", err);
-        setError(
-          err instanceof Error ? err.message : "Failed to fetch level details"
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (levelId) {
-      fetchLevel();
-    }
-  }, [levelId, apiBaseUrl, authToken]);
+    return () => clearTimeout(timer);
+  }, [level]);
 
   // Background gradients based on level category
   const getThemeBackground = (category: string) => {
@@ -87,6 +43,7 @@ const LevelInfo = ({
       themes[category as keyof typeof themes] || "from-blue-900 to-purple-900"
     );
   };
+  console.log("Level Info Component Rendered", level);
 
   // Difficulty information
   const getDifficultyInfo = (difficulty: string) => {

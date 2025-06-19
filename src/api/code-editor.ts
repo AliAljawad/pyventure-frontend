@@ -33,21 +33,25 @@ backendAPI.interceptors.request.use((config) => {
 });
 
 export const apiService = {
-  // Generate level content using Ollama
-  generateLevelContent: async (levelId, difficulty = "beginner") => {
+  // Generate level content using Ollama with dynamic topic from backend
+  generateLevelContent: async (levelId) => {
     try {
-      const topics = {
-        1: "variables and basic data types",
-        2: "conditional statements (if/else)",
-        3: "loops (for and while)",
-        4: "functions and parameters",
-        5: "lists and basic operations",
-        6: "dictionaries and key-value pairs",
-        7: "string manipulation",
-        8: "error handling with try/except",
-      };
+      // First, fetch the level data from backend to get the actual topic
+      let topic = "";
+      let difficulty = "easy";
 
-      const topic = topics[levelId] || "basic Python concepts";
+      try {
+        const levelData = await backendAPI.get(`/levels/${levelId}`);
+        console.log("levelData:", levelData.data);
+        topic = levelData.data.data.topic;
+        difficulty = levelData.data.data.difficulty;
+        console.log(`Using topic from backend for level ${levelId}:`, topic);
+      } catch (backendError) {
+        console.warn(
+          `Could not fetch level ${levelId} from backend, using fallback topic:`,
+          backendError.message
+        );
+      }
 
       const prompt = `Generate a ${difficulty}-level Python coding exercise focused on ${topic}. 
 
@@ -127,12 +131,15 @@ The starter_code should have clear # TODO: comments showing exactly where studen
           );
         }
 
+        // Add the topic that was used to the response for reference
+        parsedContent.topic_used = topic;
+
         return parsedContent;
       } catch (parseError) {
         console.error("Failed to parse JSON response:", parseError);
         console.error("Content that failed to parse:", content);
 
-        // Fallback response with proper structure
+        // Fallback response with proper structure using the fetched topic
         return {
           title: `Level ${levelId}: Python ${
             topic.charAt(0).toUpperCase() + topic.slice(1)
@@ -153,6 +160,7 @@ The starter_code should have clear # TODO: comments showing exactly where studen
             },
           ],
           key_concepts: [topic.replace(" and ", ", ").split(" ")[0]],
+          topic_used: topic,
         };
       }
     } catch (error) {
@@ -246,7 +254,7 @@ Be encouraging and provide specific guidance without giving away the complete so
 
   // Backend API calls
   backend: {
-    // Submit user's code solution
+    // Submit user's code solution with enhanced response handling
     submitCode: async (levelId, code, isCorrect) => {
       try {
         const response = await backendAPI.post("/submissions", {
@@ -254,7 +262,20 @@ Be encouraging and provide specific guidance without giving away the complete so
           code: code,
           is_correct: isCorrect,
         });
-        return response.data;
+
+        // The response now includes additional information about level completion
+        const data = response.data;
+
+        // Log completion status for debugging
+        if (data.level_completed) {
+          console.log(`Level ${levelId} completed!`);
+
+          if (data.next_level_unlocked) {
+            console.log(`Next level ${data.next_level_id} unlocked!`);
+          }
+        }
+
+        return data;
       } catch (error) {
         console.error("Error submitting code:", error);
         throw error;
@@ -286,6 +307,32 @@ Be encouraging and provide specific guidance without giving away the complete so
       }
     },
 
+    // Get completed levels for the user
+    getCompletedLevels: async () => {
+      try {
+        const response = await backendAPI.get("/user/progress");
+        const completedLevels = response.data.filter(
+          (progress) => progress.is_completed
+        );
+        return completedLevels;
+      } catch (error) {
+        console.error("Error fetching completed levels:", error);
+        throw error;
+      }
+    },
+
+    // Get available/unlocked levels for the user
+    getAvailableLevels: async () => {
+      try {
+        const response = await backendAPI.get("/user/progress");
+        // Returns all levels that have progress entries (unlocked levels)
+        return response.data;
+      } catch (error) {
+        console.error("Error fetching available levels:", error);
+        throw error;
+      }
+    },
+
     // Update user progress
     updateProgress: async (levelId, score, isCompleted) => {
       try {
@@ -301,6 +348,21 @@ Be encouraging and provide specific guidance without giving away the complete so
       }
     },
 
+    // Update user progress (alternative method name for compatibility)
+    updateUserProgress: async (levelId, score) => {
+      try {
+        const response = await backendAPI.post("/user/progress", {
+          level_id: levelId,
+          score: score,
+          is_completed: score >= 100,
+        });
+        return response.data;
+      } catch (error) {
+        console.error("Error updating user progress:", error);
+        throw error;
+      }
+    },
+
     // Get level data (if stored in backend)
     getLevel: async (levelId) => {
       try {
@@ -309,6 +371,17 @@ Be encouraging and provide specific guidance without giving away the complete so
       } catch (error) {
         console.error("Error fetching level:", error);
         throw error;
+      }
+    },
+
+    // Check if a level is unlocked for the user
+    isLevelUnlocked: async (levelId) => {
+      try {
+        const response = await backendAPI.get(`/user/progress/${levelId}`);
+        return response.data.progress !== null;
+      } catch (error) {
+        // If no progress entry exists, level is not unlocked
+        return false;
       }
     },
   },

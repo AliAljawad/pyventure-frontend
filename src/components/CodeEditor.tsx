@@ -16,7 +16,6 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import * as monaco from "monaco-editor";
 import apiService from "@/api/code-editor";
 
 const CodeEditor = ({ levelId = 1, onLevelComplete, onClose }) => {
