@@ -301,9 +301,6 @@ const Profile = () => {
                   </span>
                 </div>
                 <h2 className="text-2xl font-bold mb-1">{user.name}</h2>
-                <p className="text-gray-400 mb-4">
-                  {user.rank || "Python Explorer"}
-                </p>
 
                 <div className="flex space-x-2 mb-6">
                   <Badge className="bg-space-nebula hover:bg-space-nebula/80">

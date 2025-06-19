@@ -26,7 +26,7 @@ const CodeEditor = ({ levelId = 1, onLevelComplete }) => {
   const [hasError, setHasError] = useState(false);
   const [progress, setProgress] = useState(0);
   const [showHint, setShowHint] = useState(false);
-  const [showTestCases, setShowTestCases] = useState(true); // New state for test cases visibility
+  const [showTestCases, setShowTestCases] = useState(false); // New state for test cases visibility
   const [language, setLanguage] = useState("python");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
