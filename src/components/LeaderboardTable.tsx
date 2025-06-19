@@ -346,9 +346,6 @@ const LeaderboardTable = () => {
                                 <p className="text-xs text-gray-400">
                                   @{entry.user.username}
                                 </p>
-                                <p className="text-xs text-gray-400">
-                                  {entry.user.rank}
-                                </p>
                               </div>
                             </div>
                           </TooltipContent>
