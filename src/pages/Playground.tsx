@@ -102,14 +102,6 @@ const Playground = () => {
     }
   };
 
-  // Handle code editor close - return to level selection
-  const handleCodeEditorClose = () => {
-    setShowCodeEditor(false);
-    setTimeout(() => {
-      setGameState("level-select");
-      setSelectedLevel(null); // Reset selected level
-    }, 500);
-  };
 
   // Get selected level data for display - with null check
   const getSelectedLevelTitle = () => {
@@ -184,9 +176,17 @@ const Playground = () => {
           )}
 
           {/* Dialog for code editor - with null checks */}
-          <Dialog open={showCodeEditor} onOpenChange={setShowCodeEditor}>
-            <DialogContent className="max-w-6xl bg-space-dark-blue border-space-nebula/30">
-              <DialogHeader>
+          <Dialog
+            open={showCodeEditor}
+            onOpenChange={() => {}} // Prevent closing by setting empty function
+            modal={true} // Ensure it's modal
+          >
+            <DialogContent
+              className="max-w-6xl max-h-[95vh] bg-space-dark-blue border-space-nebula/30 overflow-hidden flex flex-col"
+              onPointerDownOutside={(e) => e.preventDefault()} // Prevent closing on outside click
+              onEscapeKeyDown={(e) => e.preventDefault()} // Prevent closing on escape key
+            >
+              <DialogHeader className="flex-shrink-0">
                 <DialogTitle className="text-2xl font-bold text-white">
                   Python Challenge -{" "}
                   {selectedLevel
@@ -194,22 +194,15 @@ const Playground = () => {
                     : "Level"}
                 </DialogTitle>
               </DialogHeader>
-              <div className="py-4">
+
+              {/* Scrollable content area */}
+              <div className="flex-1 overflow-auto py-4">
                 {selectedLevel && (
                   <CodeEditor
                     levelId={selectedLevel.id}
                     onLevelComplete={handleLevelComplete}
-                    onClose={handleCodeEditorClose}
                   />
                 )}
-              </div>
-              <div className="flex justify-end space-x-3 mt-2">
-                <button
-                  className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600 transition-colors"
-                  onClick={handleCodeEditorClose}
-                >
-                  Close
-                </button>
               </div>
             </DialogContent>
           </Dialog>
