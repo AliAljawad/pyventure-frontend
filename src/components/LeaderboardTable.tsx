@@ -48,21 +48,25 @@ const LeaderboardTable = () => {
   const fetchLeaderboard = async () => {
     try {
       setIsLoading(true);
-      const response = await axios.get(`http://127.0.0.1:8000/api/leaderboard`, {
-        params: {
-          limit: 50,
-        },
-      });
-
-      // Calculate progress based on the highest score
-      const maxScore = Math.max(
-        ...response.data.map((entry: LeaderboardEntry) => entry.stats.total_score)
+      const response = await axios.get(
+        `http://127.0.0.1:8000/api/leaderboard`,
+        {
+          params: {
+            limit: 50,
+          },
+        }
       );
-      
-      const leaderboardWithProgress = response.data.map((entry: LeaderboardEntry) => ({
-        ...entry,
-        progress: maxScore > 0 ? Math.round((entry.stats.total_score / maxScore) * 100) : 0,
-      }));
+
+      // Calculate progress based on levels completed divided by 10
+      const leaderboardWithProgress = response.data.map(
+        (entry: LeaderboardEntry) => ({
+          ...entry,
+          progress: Math.min(
+            Math.round((entry.stats.total_completed_levels / 10) * 100),
+            100
+          ),
+        })
+      );
 
       setLeaderboard(leaderboardWithProgress);
     } catch (error) {
@@ -88,7 +92,7 @@ const LeaderboardTable = () => {
     // Sort the leaderboard based on the selected field
     const sortedLeaderboard = [...leaderboard].sort((a, b) => {
       let aValue, bValue;
-      
+
       switch (field) {
         case "score":
           aValue = a.stats.total_score;
@@ -253,7 +257,9 @@ const LeaderboardTable = () => {
                             <div className="relative">
                               <Avatar className="h-8 w-8 mr-3 border border-space-nebula/30">
                                 <AvatarFallback className="bg-space-deep-purple text-white">
-                                  {entry.user.username.slice(0, 2).toUpperCase()}
+                                  {entry.user.username
+                                    .slice(0, 2)
+                                    .toUpperCase()}
                                 </AvatarFallback>
                                 <AvatarImage
                                   src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${entry.user.username}`}
@@ -279,7 +285,9 @@ const LeaderboardTable = () => {
                             <div className="flex items-center">
                               <Avatar className="h-10 w-10 mr-3">
                                 <AvatarFallback>
-                                  {entry.user.username.slice(0, 2).toUpperCase()}
+                                  {entry.user.username
+                                    .slice(0, 2)
+                                    .toUpperCase()}
                                 </AvatarFallback>
                                 <AvatarImage
                                   src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${entry.user.username}`}
