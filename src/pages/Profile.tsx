@@ -48,7 +48,8 @@ interface Achievement {
   title: string;
   description: string;
   icon_url: string;
-  earned_at: string;
+  earned_at: string | null;
+  is_earned: boolean;
 }
 
 interface ProfileData {
@@ -60,6 +61,7 @@ interface ProfileData {
 
 const Profile = () => {
   const [profileData, setProfileData] = useState<ProfileData | null>(null);
+  const [allAchievements, setAllAchievements] = useState<Achievement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -67,17 +69,25 @@ const Profile = () => {
   useEffect(() => {
     const fetchProfileData = async () => {
       try {
-        const response = await axios.get(
-          "http://127.0.0.1:8000/api/profile",
-          {
+        const [profileResponse, achievementsResponse] = await Promise.all([
+          axios.get("http://127.0.0.1:8000/api/profile", {
             headers: {
               "Content-Type": "application/json",
-              "Authorization": `Bearer ${localStorage.getItem("token")}`,
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
             },
             withCredentials: true,
-          }
-        );
-        setProfileData(response.data);
+          }),
+          axios.get("http://127.0.0.1:8000/api/achievements", {
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+            withCredentials: true,
+          }),
+        ]);
+
+        setProfileData(profileResponse.data);
+        setAllAchievements(achievementsResponse.data);
         setLoading(false);
       } catch (err) {
         console.error("Error fetching profile data:", err);
@@ -120,6 +130,27 @@ const Profile = () => {
       completed: completedLevels,
       total: difficultyLevels.length,
     };
+  };
+
+  // Get fallback icon component if icon_url fails to load
+  const getFallbackIcon = (achievement: Achievement) => {
+    const title = achievement.title.toLowerCase();
+
+    if (title.includes("first") || title.includes("start")) {
+      return <Terminal className="h-8 w-8" />;
+    } else if (title.includes("loop")) {
+      return <Code className="h-8 w-8" />;
+    } else if (title.includes("function")) {
+      return <BookOpen className="h-8 w-8" />;
+    } else if (title.includes("oop") || title.includes("object")) {
+      return <Star className="h-8 w-8" />;
+    } else if (title.includes("api")) {
+      return <Terminal className="h-8 w-8" />;
+    } else if (title.includes("database")) {
+      return <Trophy className="h-8 w-8" />;
+    } else {
+      return <Award className="h-8 w-8" />;
+    }
   };
 
   // Loading state
@@ -200,6 +231,11 @@ const Profile = () => {
   };
 
   const { user, stats, progress, achievements } = profileData;
+
+  // Get earned achievements from the API data
+  const earnedAchievements = allAchievements.filter(
+    (achievement) => achievement.is_earned
+  );
 
   // Group progress by category
   const categories = [...new Set(progress.map((p) => p.level.category))];
@@ -311,53 +347,86 @@ const Profile = () => {
                       <h3 className="text-xl font-bold mb-4">
                         Recent Achievements
                       </h3>
-                      {achievements.length > 0 ? (
+                      {earnedAchievements.length > 0 ? (
                         <div className="space-y-4">
-                          {achievements.slice(0, 5).map((achievement, i) => {
-                            // Calculate days since achievement was earned
-                            const earnedDate = new Date(achievement.earned_at);
-                            const today = new Date();
-                            const diffTime = Math.abs(
-                              today.getTime() - earnedDate.getTime()
-                            );
-                            const diffDays = Math.ceil(
-                              diffTime / (1000 * 60 * 60 * 24)
-                            );
+                          {earnedAchievements
+                            .sort(
+                              (a, b) =>
+                                new Date(b.earned_at!).getTime() -
+                                new Date(a.earned_at!).getTime()
+                            )
+                            .slice(0, 5)
+                            .map((achievement, i) => {
+                              // Calculate days since achievement was earned
+                              const earnedDate = new Date(
+                                achievement.earned_at!
+                              );
+                              const today = new Date();
+                              const diffTime = Math.abs(
+                                today.getTime() - earnedDate.getTime()
+                              );
+                              const diffDays = Math.ceil(
+                                diffTime / (1000 * 60 * 60 * 24)
+                              );
 
-                            let timeAgo;
-                            if (diffDays === 0) timeAgo = "today";
-                            else if (diffDays === 1) timeAgo = "yesterday";
-                            else if (diffDays < 7)
-                              timeAgo = `${diffDays} days ago`;
-                            else if (diffDays < 30)
-                              timeAgo = `${Math.floor(diffDays / 7)} weeks ago`;
-                            else
-                              timeAgo = `${Math.floor(
-                                diffDays / 30
-                              )} months ago`;
+                              let timeAgo;
+                              if (diffDays === 0) timeAgo = "today";
+                              else if (diffDays === 1) timeAgo = "yesterday";
+                              else if (diffDays < 7)
+                                timeAgo = `${diffDays} days ago`;
+                              else if (diffDays < 30)
+                                timeAgo = `${Math.floor(
+                                  diffDays / 7
+                                )} weeks ago`;
+                              else
+                                timeAgo = `${Math.floor(
+                                  diffDays / 30
+                                )} months ago`;
 
-                            return (
-                              <div
-                                key={i}
-                                className="flex items-center p-3 bg-space-deep-purple/20 rounded-lg"
-                              >
-                                <div className="mr-4">
-                                  <Award className="h-5 w-5 text-yellow-500" />
+                              return (
+                                <div
+                                  key={achievement.id}
+                                  className="flex items-center p-3 bg-space-deep-purple/20 rounded-lg"
+                                >
+                                  <div className="mr-4 w-10 h-10 flex items-center justify-center">
+                                    {achievement.icon_url ? (
+                                      <img
+                                        src={achievement.icon_url}
+                                        alt={achievement.title}
+                                        className="w-8 h-8 object-contain"
+                                        onError={(e) => {
+                                          // If image fails to load, show fallback icon
+                                          const target =
+                                            e.target as HTMLImageElement;
+                                          target.style.display = "none";
+                                          target.nextElementSibling?.classList.remove(
+                                            "hidden"
+                                          );
+                                        }}
+                                      />
+                                    ) : null}
+                                    <div
+                                      className={
+                                        achievement.icon_url ? "hidden" : ""
+                                      }
+                                    >
+                                      <Award className="h-5 w-5 text-yellow-500" />
+                                    </div>
+                                  </div>
+                                  <div className="flex-1">
+                                    <h4 className="font-medium">
+                                      {achievement.title}
+                                    </h4>
+                                    <p className="text-sm text-gray-400">
+                                      {achievement.description}
+                                    </p>
+                                  </div>
+                                  <div className="text-xs text-gray-500">
+                                    {timeAgo}
+                                  </div>
                                 </div>
-                                <div className="flex-1">
-                                  <h4 className="font-medium">
-                                    {achievement.title}
-                                  </h4>
-                                  <p className="text-sm text-gray-400">
-                                    {achievement.description}
-                                  </p>
-                                </div>
-                                <div className="text-xs text-gray-500">
-                                  {timeAgo}
-                                </div>
-                              </div>
-                            );
-                          })}
+                              );
+                            })}
                         </div>
                       ) : (
                         <div className="text-center py-6 text-gray-400">
@@ -369,64 +438,53 @@ const Profile = () => {
                   </Card>
 
                   <Card className="cosmic-card p-6">
-                    <h3 className="text-xl font-bold mb-4">
-                      Achievements Progress
-                    </h3>
+                    <h3 className="text-xl font-bold mb-4">All Achievements</h3>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                      {[
-                        {
-                          name: "First Steps",
-                          icon: <Terminal className="h-8 w-8" />,
-                          unlocked: stats.total_completed_levels >= 1,
-                        },
-                        {
-                          name: "Loop Explorer",
-                          icon: <Code className="h-8 w-8" />,
-                          unlocked: calculateCategoryCompletion("Loops") >= 50,
-                        },
-                        {
-                          name: "Function Master",
-                          icon: <BookOpen className="h-8 w-8" />,
-                          unlocked:
-                            calculateCategoryCompletion("Functions") >= 50,
-                        },
-                        {
-                          name: "OOP Wizard",
-                          icon: <Star className="h-8 w-8" />,
-                          unlocked: calculateCategoryCompletion("OOP") >= 50,
-                        },
-                        {
-                          name: "API Explorer",
-                          icon: <Terminal className="h-8 w-8" />,
-                          unlocked: calculateCategoryCompletion("API") >= 30,
-                        },
-                        {
-                          name: "Database Guru",
-                          icon: <Trophy className="h-8 w-8" />,
-                          unlocked:
-                            calculateCategoryCompletion("Database") >= 30,
-                        },
-                      ].map((badge, i) => (
+                      {allAchievements.map((achievement) => (
                         <div
-                          key={i}
+                          key={achievement.id}
                           className={`flex flex-col items-center p-4 rounded-lg ${
-                            badge.unlocked
+                            achievement.is_earned
                               ? "bg-space-deep-purple/30"
                               : "bg-space-deep-purple/10 opacity-50"
                           }`}
                         >
                           <div
                             className={`w-14 h-14 rounded-full flex items-center justify-center mb-2 ${
-                              badge.unlocked
+                              achievement.is_earned
                                 ? "bg-gradient-to-r from-space-nebula to-space-neon-cyan"
                                 : "bg-space-deep-purple/20"
                             }`}
                           >
-                            {badge.icon}
+                            {achievement.icon_url ? (
+                              <img
+                                src={achievement.icon_url}
+                                alt={achievement.title}
+                                className="w-8 h-8 object-contain"
+                                onError={(e) => {
+                                  // If image fails to load, show fallback icon
+                                  const target = e.target as HTMLImageElement;
+                                  target.style.display = "none";
+                                  target.nextElementSibling?.classList.remove(
+                                    "hidden"
+                                  );
+                                }}
+                              />
+                            ) : null}
+                            <div
+                              className={achievement.icon_url ? "hidden" : ""}
+                            >
+                              {getFallbackIcon(achievement)}
+                            </div>
                           </div>
                           <span className="text-sm text-center">
-                            {badge.name}
+                            {achievement.title}
                           </span>
+                          {achievement.is_earned && (
+                            <span className="text-xs text-green-500 mt-1">
+                              Earned
+                            </span>
+                          )}
                         </div>
                       ))}
                     </div>
