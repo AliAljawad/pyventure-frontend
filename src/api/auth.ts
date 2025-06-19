@@ -1,3 +1,4 @@
+// api/auth.ts
 export const registerUser = async (
   name: string,
   username: string,
@@ -56,4 +57,46 @@ export const verify2FA = async (email: string, code: string) => {
   console.log(data);
   if (!res.ok) throw new Error(data.message || "2FA verification failed");
   return data;
+};
+
+// New function to make authenticated requests
+export const makeAuthenticatedRequest = async (
+  url: string,
+  options: RequestInit = {}
+) => {
+  const token = localStorage.getItem("authToken");
+
+  const config: RequestInit = {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      ...(token && { Authorization: `Bearer ${token}` }),
+      ...options.headers,
+    },
+  };
+
+  const response = await fetch(url, config);
+
+  // If token is invalid, clear auth data
+  if (response.status === 401) {
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("authUser");
+    window.location.href = "/login";
+  }
+
+  return response;
+};
+
+// Function to refresh user data
+export const getUserProfile = async () => {
+  const response = await makeAuthenticatedRequest(
+    "http://127.0.0.1:8000/api/user"
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch user profile");
+  }
+
+  return response.json();
 };

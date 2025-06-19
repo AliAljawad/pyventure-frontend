@@ -1,188 +1,177 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Shield, ShieldCheck } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
 import FooterSection from "@/components/FooterSection";
 import { verify2FA } from "@/api/auth";
+import { useAuth } from "@/contexts/AuthContext";
 
 const TwoFactorAuth = () => {
   const navigate = useNavigate();
+  const { login, isAuthenticated } = useAuth();
+  const [code, setCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [email, setEmail] = useState("");
 
-  // Update title and get email from session storage
   useEffect(() => {
     document.title = "2FA Verification - PyVenture";
 
+    // Get email from sessionStorage
     const storedEmail = sessionStorage.getItem("authEmail");
     if (!storedEmail) {
-      // If no email in session storage, redirect to login
-      toast.error("Authentication error. Please log in again.");
+      toast.error("No email found. Please login again.");
+      navigate("/login");
+      return;
+    }
+    setEmail(storedEmail);
+
+    // If user is already authenticated, redirect
+    if (isAuthenticated) {
+      const redirectPath =
+        sessionStorage.getItem("authRedirect") || "/playground";
+      navigate(redirectPath, { replace: true });
+    }
+  }, [navigate, isAuthenticated]);
+
+  const handleVerify2FA = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) {
+      toast.error("Email not found. Please login again.");
       navigate("/login");
       return;
     }
 
-    setEmail(storedEmail);
-  }, [navigate]);
-
-  const handleVerify = async () => {
     setIsLoading(true);
-    const otpValue = otp.join("");
-
     try {
-      const data = await verify2FA(email, otpValue);
+      const data = await verify2FA(email, code);
 
-      // Store token and user data
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("user", JSON.stringify(data.user));
+      // Assuming your API returns token and user data after successful 2FA
+      if (data.token && data.user) {
+        // Use the auth context to login
+        login(data.token, data.user);
 
-      // Clear the session email since we no longer need it
-      sessionStorage.removeItem("authEmail");
+        // Clear session storage
+        sessionStorage.removeItem("authEmail");
 
-      toast.success("2FA verification successful!", {
-        description: "Welcome to PyVenture!",
-        icon: <ShieldCheck className="text-green-500" />,
-      });
+        // Get redirect path and clear it
+        const redirectPath =
+          sessionStorage.getItem("authRedirect") || "/playground";
+        sessionStorage.removeItem("authRedirect");
 
-      navigate("/playground");
-    } catch (error) {
+        toast.success("Authentication successful!");
+        navigate(redirectPath, { replace: true });
+      } else {
+        toast.error("Invalid response from server");
+      }
+    } catch (error: unknown) {
       if (error instanceof Error) {
         toast.error(error.message);
       } else {
-        toast.error("Invalid verification code");
+        toast.error("An unknown error occurred.");
       }
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleInputChange = (index, value) => {
-    // Only allow numbers
-    if (value && !/^\d*$/.test(value)) return;
-
-    const newOtp = [...otp];
-    newOtp[index] = value;
-    setOtp(newOtp);
-
-    // Auto-focus next input if value is entered
-    if (value && index < 5) {
-      const nextInput = document.getElementById(`otp-input-${index + 1}`);
-      if (nextInput) nextInput.focus();
-    }
-  };
-
-  const handleKeyDown = (index, e) => {
-    // Handle backspace to go to previous input
-    if (e.key === "Backspace" && !otp[index] && index > 0) {
-      const prevInput = document.getElementById(`otp-input-${index - 1}`);
-      if (prevInput) prevInput.focus();
-    }
-  };
-
-  const handlePaste = (e) => {
-    e.preventDefault();
-    const pastedData = e.clipboardData.getData("text");
-    const pastedNumbers = pastedData
-      .replace(/[^\d]/g, "")
-      .slice(0, 6)
-      .split("");
-
-    const newOtp = [...otp];
-    pastedNumbers.forEach((num, index) => {
-      if (index < 6) newOtp[index] = num;
-    });
-
-    setOtp(newOtp);
-  };
-
   const handleResendCode = async () => {
-    try {
-      // This would need to call an API endpoint to resend the code
-      // For now we'll just show a toast
-      toast.success("A new verification code has been sent to your email");
-    } catch (error) {
-      toast.error("Failed to resend code");
-    }
+    // You might want to implement a resend code function
+    toast.info("Resend code functionality not implemented yet");
   };
+
+  if (isAuthenticated) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
-
       <main className="flex-grow py-10 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
         <div className="w-full max-w-md">
+          <div className="absolute top-1/4 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full bg-gradient-to-br from-space-nebula to-space-neon-purple opacity-10 blur-3xl -z-10" />
+
           <Card className="cosmic-card shadow-xl border-space-nebula/20">
             <CardHeader className="text-center">
-              <div className="mx-auto mb-4 h-12 w-12 rounded-full bg-space-nebula/10 flex items-center justify-center">
-                <Shield className="h-6 w-6 text-space-nebula" />
-              </div>
               <CardTitle className="text-2xl font-bold">
-                Two-Factor Authentication
+                Two-Factor <span className="glow-text">Authentication</span>
               </CardTitle>
               <CardDescription className="text-gray-400">
-                Please enter the verification code sent to {email}
+                Enter the verification code sent to{" "}
+                {email
+                  ? `${email.substring(0, 3)}***@${email.split("@")[1]}`
+                  : "your email"}
               </CardDescription>
             </CardHeader>
 
-            <CardContent className="space-y-4">
-              <div className="flex justify-center gap-2">
-                {otp.map((digit, index) => (
-                  <input
-                    key={index}
-                    id={`otp-input-${index}`}
+            <CardContent>
+              <form onSubmit={handleVerify2FA} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="code">Verification Code</Label>
+                  <Input
+                    id="code"
                     type="text"
-                    inputMode="numeric"
-                    maxLength={1}
-                    value={digit}
-                    onChange={(e) => handleInputChange(index, e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(index, e)}
-                    onPaste={index === 0 ? handlePaste : undefined}
-                    className="w-12 h-12 text-center rounded-md bg-white/10 border border-space-nebula/30 text-white text-xl focus:border-space-nebula focus:ring-1 focus:ring-space-nebula focus:outline-none"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
+                    required
+                    placeholder="Enter 6-digit code"
+                    maxLength={6}
+                    className="bg-space-deep-purple/20 border-space-nebula/30 text-center text-lg tracking-wider"
                   />
-                ))}
-              </div>
+                </div>
 
-              <div className="text-sm text-center text-gray-400 mt-4">
-                Didn't receive a code?{" "}
-                <button
-                  className="text-space-nebula hover:underline"
-                  onClick={handleResendCode}
+                <Button
+                  type="submit"
+                  className="cosmic-button w-full"
+                  disabled={isLoading || code.length !== 6}
                 >
-                  Resend
-                </button>
-              </div>
-            </CardContent>
+                  {isLoading ? (
+                    <>
+                      <div className="h-4 w-4 border-2 border-t-transparent border-white rounded-full animate-spin mr-2"></div>
+                      Verifying...
+                    </>
+                  ) : (
+                    <>
+                      Verify Code
+                      <ArrowRight className="h-4 w-4 ml-2" />
+                    </>
+                  )}
+                </Button>
 
-            <CardFooter>
-              <Button
-                onClick={handleVerify}
-                className="cosmic-button w-full"
-                disabled={isLoading || otp.some((digit) => !digit)}
-              >
-                {isLoading ? (
-                  <>
-                    <div className="h-4 w-4 border-2 border-t-transparent border-white rounded-full animate-spin mr-2" />
-                    Verifying...
-                  </>
-                ) : (
-                  <>
-                    <Shield className="h-4 w-4 mr-2" />
-                    Verify Code
-                  </>
-                )}
-              </Button>
-            </CardFooter>
+                <div className="text-center">
+                  <p className="text-sm text-gray-400">
+                    Didn't receive the code?{" "}
+                    <button
+                      type="button"
+                      onClick={handleResendCode}
+                      className="text-space-nebula hover:underline"
+                    >
+                      Resend Code
+                    </button>
+                  </p>
+                </div>
+
+                <div className="text-center">
+                  <button
+                    type="button"
+                    onClick={() => navigate("/login")}
+                    className="text-sm text-gray-400 hover:text-white"
+                  >
+                    ← Back to Login
+                  </button>
+                </div>
+              </form>
+            </CardContent>
           </Card>
         </div>
       </main>

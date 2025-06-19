@@ -30,7 +30,7 @@ const Playground = () => {
 
   const getAuthToken = (): string | null => {
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("authToken");
       return token;
     } catch (error) {
       console.error("Error getting auth token:", error);

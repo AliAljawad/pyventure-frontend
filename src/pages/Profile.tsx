@@ -73,14 +73,14 @@ const Profile = () => {
           axios.get("http://127.0.0.1:8000/api/profile", {
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${localStorage.getItem("token")}`,
+              Authorization: `Bearer ${localStorage.getItem("authToken")}`,
             },
             withCredentials: true,
           }),
           axios.get("http://127.0.0.1:8000/api/achievements", {
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${localStorage.getItem("token")}`,
+              Authorization: `Bearer ${localStorage.getItem("authToken")}`,
             },
             withCredentials: true,
           }),

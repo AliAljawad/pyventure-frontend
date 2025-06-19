@@ -1,31 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Menu, X, User, Award, Terminal, Home, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext"; // Import the auth context
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const navigate = useNavigate();
 
-  // Check authentication status when component mounts and when localStorage changes
-  useEffect(() => {
-    const checkAuthStatus = () => {
-      const token = localStorage.getItem("token");
-      setIsLoggedIn(!!token);
-    };
-
-    // Check initial auth status
-    checkAuthStatus();
-
-    // Set up event listener for storage changes (in case user logs in/out in another tab)
-    window.addEventListener("storage", checkAuthStatus);
-
-    return () => {
-      window.removeEventListener("storage", checkAuthStatus);
-    };
-  }, []);
+  // Use the auth context instead of local state
+  const { isAuthenticated, logout } = useAuth();
 
   const toggleMenu = () => {
     setIsOpen(!isOpen);
@@ -37,12 +22,8 @@ const Navbar = () => {
   };
 
   const handleLogout = () => {
-    // Remove token and user data from localStorage
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-
-    // Trigger a storage event so other components know the login status changed
-    window.dispatchEvent(new Event("storage"));
+    // Use the logout function from AuthContext
+    logout();
 
     // Navigate to home page
     navigateTo("/");
@@ -92,7 +73,7 @@ const Navbar = () => {
             </Button>
 
             {/* Conditionally render Profile button */}
-            {isLoggedIn && (
+            {isAuthenticated && (
               <Button
                 variant="ghost"
                 className="text-gray-200 hover:text-white"
@@ -104,7 +85,7 @@ const Navbar = () => {
             )}
 
             {/* Conditionally render Login/Logout button */}
-            {isLoggedIn ? (
+            {isAuthenticated ? (
               <Button
                 className="ml-4 cosmic-button bg-red-600 hover:bg-red-700"
                 onClick={handleLogout}
@@ -167,7 +148,7 @@ const Navbar = () => {
           </Button>
 
           {/* Conditionally render Profile button in mobile menu */}
-          {isLoggedIn && (
+          {isAuthenticated && (
             <Button
               variant="ghost"
               className="w-full justify-start text-gray-200 hover:text-white"
@@ -179,7 +160,7 @@ const Navbar = () => {
           )}
 
           {/* Conditionally render Login/Logout button in mobile menu */}
-          {isLoggedIn ? (
+          {isAuthenticated ? (
             <Button
               className="w-full mt-4 cosmic-button bg-red-600 hover:bg-red-700"
               onClick={handleLogout}

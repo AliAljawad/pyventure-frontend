@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import {
   Card,
@@ -18,9 +18,12 @@ import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
 import FooterSection from "@/components/FooterSection";
 import { loginUser, registerUser } from "@/api/auth";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Login = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { isAuthenticated } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
 
   const [loginData, setLoginData] = useState({ email: "", password: "" });
@@ -32,9 +35,17 @@ const Login = () => {
     password_confirmation: "",
   });
 
+  // Get the return path from location state
+  const from = location.state?.from?.pathname || "/playground";
+
   useEffect(() => {
     document.title = "Login - PyVenture";
-  }, []);
+
+    // If user is already authenticated, redirect to the intended page
+    if (isAuthenticated) {
+      navigate(from, { replace: true });
+    }
+  }, [isAuthenticated, navigate, from]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,6 +54,8 @@ const Login = () => {
       const data = await loginUser(loginData.email, loginData.password);
       // Store the email in sessionStorage for the 2FA verification
       sessionStorage.setItem("authEmail", loginData.email);
+      // Store the intended destination
+      sessionStorage.setItem("authRedirect", from);
       toast.success(data.message || "Please check your email for the 2FA code");
       navigate("/2fa");
     } catch (error: unknown) {
@@ -69,6 +82,8 @@ const Login = () => {
       );
       // Store the email in sessionStorage for the 2FA verification
       sessionStorage.setItem("authEmail", signupData.email);
+      // Store the intended destination
+      sessionStorage.setItem("authRedirect", from);
       toast.success(
         data.message || "Account created! Please verify your email"
       );
@@ -84,6 +99,11 @@ const Login = () => {
       setIsLoading(false);
     }
   };
+
+  // Don't render the login form if user is already authenticated
+  if (isAuthenticated) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen flex flex-col">
