@@ -19,7 +19,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import axios from "axios";
+import { getUserProfile, makeAuthenticatedRequest } from "@/api/auth"; // Import auth functions
 
 type SortField = "score" | "levels" | "attempts";
 
@@ -44,34 +44,70 @@ const LeaderboardTable = () => {
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [isLoading, setIsLoading] = useState(false);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  // Function to check authentication status
+  const checkAuthentication = async () => {
+    try {
+      await getUserProfile();
+      setIsAuthenticated(true);
+      return true;
+    } catch (error) {
+      console.error("Authentication failed:", error);
+      // Clear storage and redirect to login
+      localStorage.removeItem("authToken");
+      localStorage.removeItem("authUser");
+
+      // Show error toast
+      toast.error("Please log in to view the leaderboard");
+
+      // Navigate to login page
+      window.location.href = "/login";
+      return false;
+    }
+  };
 
   const fetchLeaderboard = async () => {
     try {
       setIsLoading(true);
-      const response = await axios.get(
-        `http://127.0.0.1:8000/api/leaderboard`,
-        {
-          params: {
-            limit: 50,
-          },
-        }
+
+      // Check authentication first
+      const isAuth = await checkAuthentication();
+      if (!isAuth) {
+        return;
+      }
+
+      // Make authenticated request to fetch leaderboard
+      const response = await makeAuthenticatedRequest(
+        `http://127.0.0.1:8000/api/leaderboard?limit=50`
       );
 
+      if (!response.ok) {
+        throw new Error("Failed to fetch leaderboard data");
+      }
+
+      const data = await response.json();
+
       // Calculate progress based on levels completed divided by 10
-      const leaderboardWithProgress = response.data.map(
-        (entry: LeaderboardEntry) => ({
-          ...entry,
-          progress: Math.min(
-            Math.round((entry.stats.total_completed_levels / 10) * 100),
-            100
-          ),
-        })
-      );
+      const leaderboardWithProgress = data.map((entry: LeaderboardEntry) => ({
+        ...entry,
+        progress: Math.min(
+          Math.round((entry.stats.total_completed_levels / 10) * 100),
+          100
+        ),
+      }));
 
       setLeaderboard(leaderboardWithProgress);
     } catch (error) {
       console.error("Error fetching leaderboard:", error);
       toast.error("Failed to fetch leaderboard data");
+
+      // If it's an authentication error, redirect to login
+      if (error instanceof Error && error.message.includes("401")) {
+        localStorage.removeItem("authToken");
+        localStorage.removeItem("authUser");
+        window.location.href = "/login";
+      }
     } finally {
       setIsLoading(false);
     }
@@ -124,6 +160,18 @@ const LeaderboardTable = () => {
   const handleRefresh = () => {
     fetchLeaderboard();
   };
+
+  // Show loading state while checking authentication
+  if (!isAuthenticated && isLoading) {
+    return (
+      <div className="w-full flex justify-center items-center py-12">
+        <div className="flex items-center gap-2 text-gray-400">
+          <RefreshCw className="h-5 w-5 animate-spin" />
+          <span>Authenticating...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full">

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import Navbar from "@/components/Navbar";
 import FooterSection from "@/components/FooterSection";
@@ -7,6 +8,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Award, Terminal, Star, BookOpen, Trophy, Code } from "lucide-react";
+import { getUserProfile } from "@/api/auth";
 
 // Define types for our API responses
 interface User {
@@ -60,15 +62,32 @@ interface ProfileData {
 }
 
 const Profile = () => {
+  const navigate = useNavigate();
   const [profileData, setProfileData] = useState<ProfileData | null>(null);
   const [allAchievements, setAllAchievements] = useState<Achievement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Helper function to clear auth data and redirect to login
+  const clearAuthAndRedirect = () => {
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("authUser");
+    navigate("/login");
+  };
+
   // Fetch profile data
   useEffect(() => {
     const fetchProfileData = async () => {
       try {
+        // First, verify user authentication
+        const userProfile = await getUserProfile();
+
+        if (!userProfile) {
+          clearAuthAndRedirect();
+          return;
+        }
+
+        // If authentication is successful, fetch profile data
         const [profileResponse, achievementsResponse] = await Promise.all([
           axios.get("http://127.0.0.1:8000/api/profile", {
             headers: {
@@ -91,14 +110,31 @@ const Profile = () => {
         setLoading(false);
       } catch (err) {
         console.error("Error fetching profile data:", err);
+
+        // Check if it's an authentication error
+        if (axios.isAxiosError(err)) {
+          if (err.response?.status === 401) {
+            clearAuthAndRedirect();
+            return;
+          }
+        }
+
+        // For other errors, show error message
         setError("Failed to load profile data. Please try again later.");
         setLoading(false);
       }
     };
 
+    // Check if user is authenticated before making requests
+    const token = localStorage.getItem("authToken");
+    if (!token) {
+      clearAuthAndRedirect();
+      return;
+    }
+
     fetchProfileData();
     document.title = "Profile - PyVenture";
-  }, []);
+  }, [navigate]);
 
   // Calculate completion percentage for a category
   const calculateCategoryCompletion = (category: string): number => {

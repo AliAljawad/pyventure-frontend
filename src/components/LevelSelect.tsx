@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { ChevronRight, Lock, Check, Loader2 } from "lucide-react";
+import { getUserProfile } from "@/api/auth";
 
 export interface Level {
   id: number;
@@ -24,19 +25,17 @@ export interface UserProgress {
 export interface LevelSelectProps {
   onSelectLevel: (level: Level) => void;
   apiBaseUrl?: string;
-  authToken?: string; // Pass auth token as prop instead of using localStorage
 }
 
 const LevelSelect = ({
   onSelectLevel,
   apiBaseUrl = "http://127.0.0.1:8000/api",
-  authToken,
 }: LevelSelectProps) => {
   const [levels, setLevels] = useState<Level[]>([]);
   const [userProgress, setUserProgress] = useState<UserProgress[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   // Function to process levels based on user progress
   const processLevelsWithProgress = (
     fetchedLevels: Level[],
@@ -72,6 +71,24 @@ const LevelSelect = ({
     });
   };
 
+  // Check authentication and get user profile
+  const checkAuthentication = async () => {
+    try {
+      const profileData = await getUserProfile();
+      setIsAuthenticated(true);
+      return profileData;
+    } catch (error) {
+      console.error("Authentication failed:", error);
+      // Clear local storage and redirect to login on auth failure
+      localStorage.removeItem("authToken");
+      localStorage.removeItem("authUser");
+      setIsAuthenticated(false);
+      // Navigate to login - you might need to use your router's navigation method
+      window.location.href = "/login";
+      throw error;
+    }
+  };
+
   // Fetch levels and user progress from API
   useEffect(() => {
     const fetchData = async () => {
@@ -79,29 +96,51 @@ const LevelSelect = ({
         setLoading(true);
         setError(null);
 
+        let userProfileData = null;
+        let isUserAuthenticated = false;
+
+        // First, try to authenticate the user
+        try {
+          userProfileData = await checkAuthentication();
+          isUserAuthenticated = true;
+        } catch (authError) {
+          // Authentication failed, continue as guest user
+          console.log("User not authenticated, proceeding as guest");
+          isUserAuthenticated = false;
+        }
+
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
         };
 
-        // Add authorization header if token is provided
-        if (authToken) {
-          headers["Authorization"] = `Bearer ${authToken}`;
+        // Add authorization header if user is authenticated
+        if (isUserAuthenticated) {
+          const token = localStorage.getItem("authToken");
+          if (token) {
+            headers["Authorization"] = `Bearer ${token}`;
+          }
         }
 
         // Fetch levels and progress simultaneously
-        const [levelsResponse, progressResponse] = await Promise.all([
+        const requests = [
           fetch(`${apiBaseUrl}/levels`, {
             method: "GET",
             headers,
           }),
-          // Only fetch progress if user is authenticated
-          authToken
-            ? fetch(`${apiBaseUrl}/profile`, {
-                method: "GET",
-                headers,
-              })
-            : Promise.resolve(null),
-        ]);
+        ];
+
+        // Only fetch progress if user is authenticated
+        if (isUserAuthenticated) {
+          requests.push(
+            fetch(`${apiBaseUrl}/profile`, {
+              method: "GET",
+              headers,
+            })
+          );
+        }
+
+        const responses = await Promise.all(requests);
+        const [levelsResponse, progressResponse] = responses;
 
         // Handle levels response
         if (!levelsResponse.ok) {
@@ -126,7 +165,7 @@ const LevelSelect = ({
         }
 
         // Process levels with progress data
-        const processedLevels = authToken
+        const processedLevels = isUserAuthenticated
           ? processLevelsWithProgress(fetchedLevels, userProgressData)
           : fetchedLevels.map((level: Level, index: number) => ({
               ...level,
@@ -144,7 +183,7 @@ const LevelSelect = ({
     };
 
     fetchData();
-  }, [apiBaseUrl, authToken]);
+  }, [apiBaseUrl]);
 
   // Function to get difficulty color
   const getDifficultyColor = (difficulty: string) => {
@@ -214,8 +253,21 @@ const LevelSelect = ({
       <div className="mb-8">
         <h2 className="text-2xl font-bold text-white mb-4">Select a Level</h2>
 
+        {/* Authentication status indicator */}
+        {!isAuthenticated && (
+          <div className="bg-yellow-900/20 border border-yellow-500/50 rounded-lg p-4 mb-6">
+            <p className="text-yellow-300 text-sm">
+              Playing as guest.{" "}
+              <a href="/login" className="text-yellow-400 hover:underline">
+                Login
+              </a>{" "}
+              to save progress and unlock more levels.
+            </p>
+          </div>
+        )}
+
         {/* Progress Summary - only show if user is authenticated */}
-        {authToken && (
+        {isAuthenticated && (
           <div className="bg-space-deep-purple/20 rounded-lg p-4 mb-6">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex gap-6">
@@ -317,7 +369,7 @@ const LevelSelect = ({
               {/* Bottom section with progress info and button */}
               <div className="flex justify-between items-center mt-2">
                 {/* Show user's progress for this level if available */}
-                {authToken && userProgress.length > 0 && (
+                {isAuthenticated && userProgress.length > 0 && (
                   <div className="text-xs text-gray-400">
                     {(() => {
                       const progress = userProgress.find(
