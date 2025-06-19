@@ -37,6 +37,9 @@ const PhaserGame = ({
           debug: false,
         },
       },
+      input: {
+        gamepad: true, // Enable gamepad support
+      },
       scene: {
         preload: preload,
         create: create,
@@ -50,6 +53,7 @@ const PhaserGame = ({
     // Game objects
     let player: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
     let cursors: Phaser.Types.Input.Keyboard.CursorKeys;
+    let gamepad: Phaser.Input.Gamepad.Gamepad | null = null;
     let map: Phaser.Tilemaps.Tilemap;
     let mainTileset: Phaser.Tilemaps.Tileset;
     let spikeTileset: Phaser.Tilemaps.Tileset;
@@ -74,6 +78,10 @@ const PhaserGame = ({
     let backgroundMusic: Phaser.Sound.BaseSound;
     let isRunning = false; // Track if running sound is playing
     let musicKey: string; // Track which music is playing
+
+    // Controller variables
+    let controllerConnected = false;
+    let controllerStatusText: Phaser.GameObjects.Text;
 
     // Preload game assets
     function preload(this: Phaser.Scene) {
@@ -363,6 +371,19 @@ const PhaserGame = ({
       }
     }
 
+    // Function to update controller status display
+    function updateControllerStatus(scene: Phaser.Scene) {
+      if (controllerStatusText) {
+        if (controllerConnected && gamepad) {
+          controllerStatusText.setText(`🎮 Controller: ${gamepad.id}`);
+          controllerStatusText.setStyle({ color: "#00ff00" });
+        } else {
+          controllerStatusText.setText("🎮 Controller: Not Connected");
+          controllerStatusText.setStyle({ color: "#ff6666" });
+        }
+      }
+    }
+
     // Create game world
     function create(this: Phaser.Scene) {
       // Reset game state
@@ -370,6 +391,7 @@ const PhaserGame = ({
       lastDirection = "idle";
       currentAnimation = "";
       isRunning = false;
+      controllerConnected = false;
 
       // Initialize sounds
       checkpointSound = this.sound.add("checkpoint", { volume: 0.7 });
@@ -382,6 +404,36 @@ const PhaserGame = ({
 
       // Start background music
       startBackgroundMusic(this);
+
+      // Setup gamepad
+      if (this.input.gamepad) {
+        this.input.gamepad.once(
+          "connected",
+          (pad: Phaser.Input.Gamepad.Gamepad) => {
+            gamepad = pad;
+            controllerConnected = true;
+            console.log("Gamepad connected:", pad.id);
+            updateControllerStatus(this);
+          }
+        );
+
+        this.input.gamepad.once(
+          "disconnected",
+          (pad: Phaser.Input.Gamepad.Gamepad) => {
+            gamepad = null;
+            controllerConnected = false;
+            console.log("Gamepad disconnected");
+            updateControllerStatus(this);
+          }
+        );
+
+        // Check if gamepad is already connected
+        if (this.input.gamepad.total > 0) {
+          gamepad = this.input.gamepad.getPad(0);
+          controllerConnected = true;
+          updateControllerStatus(this);
+        }
+      }
 
       // Create the tilemap from CSV
       map = this.make.tilemap({
@@ -551,12 +603,25 @@ const PhaserGame = ({
 
       instructions.setText([
         "Controls:",
-        "← → Arrow keys to move",
-        "↑ Arrow key to jump",
-        "M to mute/unmute music",
+        "Keyboard: ← → Arrow keys to move, ↑ Arrow key to jump, M to mute/unmute",
+        "Controller: Left stick/D-pad to move, A/Cross button to jump, Start/Menu to mute/unmute",
         "⚠️ Avoid the spikes!",
         "🐍 Find the Python logo!",
       ]);
+
+      // Add controller status display
+      controllerStatusText = this.add
+        .text(16, this.cameras.main.height - 30, "🎮 Controller: Checking...", {
+          font: "14px monospace",
+          color: "#ffffff",
+          backgroundColor: "rgba(0,0,0,0.5)",
+          padding: { x: 8, y: 4 },
+        })
+        .setScrollFactor(0)
+        .setDepth(100);
+
+      // Update controller status
+      updateControllerStatus(this);
 
       // Add level title
       const levelTitle = this.add
@@ -587,7 +652,50 @@ const PhaserGame = ({
       // Player movement
       const acceleration = 400; // Increased for more responsive movement
 
-      if (cursors.left.isDown) {
+      // Check for controller input
+      let leftPressed = false;
+      let rightPressed = false;
+      let jumpPressed = false;
+      let mutePressed = false;
+
+      // Keyboard input
+      if (cursors.left.isDown) leftPressed = true;
+      if (cursors.right.isDown) rightPressed = true;
+      if (cursors.up.isDown) jumpPressed = true;
+
+      // Controller input
+      if (gamepad && controllerConnected) {
+        // Left stick or D-pad for movement
+        const leftStickX = gamepad.leftStick.x;
+        const threshold = 0.3; // Dead zone threshold
+
+        if (leftStickX < -threshold || gamepad.left) {
+          leftPressed = true;
+        }
+        if (leftStickX > threshold || gamepad.right) {
+          rightPressed = true;
+        }
+
+        // A button (Xbox) / Cross button (PlayStation) for jump
+        if (gamepad.A) {
+          jumpPressed = true;
+        }
+
+        // Start/Menu button for mute toggle (button index 9 is usually Start/Menu)
+        if (gamepad.buttons[9]?.pressed && !mutePressed) {
+          mutePressed = true;
+          if (backgroundMusic) {
+            if (backgroundMusic.isPlaying) {
+              backgroundMusic.pause();
+            } else {
+              backgroundMusic.resume();
+            }
+          }
+        }
+      }
+
+      // Handle movement based on combined input
+      if (leftPressed) {
         player.setAccelerationX(-acceleration);
 
         // Handle running sound
@@ -605,7 +713,7 @@ const PhaserGame = ({
           currentAnimation = "walk_left";
         }
         lastDirection = "left";
-      } else if (cursors.right.isDown) {
+      } else if (rightPressed) {
         player.setAccelerationX(acceleration);
 
         // Handle running sound
@@ -646,7 +754,7 @@ const PhaserGame = ({
       }
 
       // Jumping
-      if (cursors.up.isDown && player.body.blocked.down) {
+      if (jumpPressed && player.body.blocked.down) {
         player.setVelocityY(-300);
 
         // Play jump sound
